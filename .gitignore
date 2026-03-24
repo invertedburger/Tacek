@@ -1,0 +1,6 @@
+secrets.json
+menus/
+results/
+__pycache__/
+*.pyc
+.env

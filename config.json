@@ -1,0 +1,33 @@
+{
+  "pdf_links": [
+    "https://www.iqrestaurant.cz/brno/menu.pdf"
+  ],
+  "webpage_links": [
+    "https://www.ilpaladar.cz/tydenni-menu/",
+    "https://www.utesare.cz/poledni-nabidka/",
+    "https://www.uhovezihopupku.cz/menu/",
+    "https://www.kometapub.cz/arena#jidelni"
+  ],
+  "restaurant_names": {
+    "www.iqrestaurant.cz":   "Holandska Brno Czech Republic",
+    "www.utesare.cz":        "U Tesare Brno Czech Republic",
+    "www.uhovezihopupku.cz": "Videnska 55 Brno",
+    "www.kometapub.cz":      "Kometa Pub Brno Czech Republic",
+    "www.ilpaladar.cz":      "Il Paladar Brno Czech Republic"
+  },
+  "restaurant_display_names": {
+    "www.iqrestaurant.cz":   "IQ Restaurant",
+    "www.utesare.cz":        "U Tesaře",
+    "www.uhovezihopupku.cz": "U Hovězího Pupku",
+    "www.kometapub.cz":      "Kometa Pub",
+    "www.ilpaladar.cz":      "Il Paladar"
+  },
+  "restaurant_coords_override": {},
+  "webpage_parsers": {
+    "www.utesare.cz": "image"
+  },
+  "download_dir": "menus",
+  "results_dir":  "results",
+  "min_menu_text_length": 200,
+  "gemini_model": "models/gemini-2.5-flash"
+}
