@@ -1,0 +1,72 @@
+name: Build & Deploy
+
+on:
+  schedule:
+    - cron: '0 8 * * 1-5'   # Mon–Fri 8:00 UTC = 9/10 CET/CEST
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Restore menu & analysis cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            menus/
+            results/*.json
+            results/*.log
+          key: tacek-data-${{ github.run_id }}
+          restore-keys: tacek-data-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create secrets.json
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python -c "
+          import json, os
+          json.dump({
+              'gemini_api_key': os.environ['GEMINI_API_KEY'],
+              'ftp_host': '', 'ftp_user': '', 'ftp_pass': '', 'ftp_dir': ''
+          }, open('secrets.json', 'w'))
+          "
+
+      - name: Generate site
+        run: python run.py
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: results/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

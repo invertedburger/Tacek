@@ -25,10 +25,17 @@ def _clean_name(name):
 
 
 def _parse_date(label):
-    m = re.search(r'(\d{1,2})[.\s]+(\d{1,2})[.\s]+(\d{4})', str(label))
+    label = str(label)
+    m = re.search(r'(\d{1,2})[.\s]+(\d{1,2})[.\s]+(\d{4})', label)
     if m:
         try:
             return datetime(int(m.group(3)), int(m.group(2)), int(m.group(1))).strftime('%Y-%m-%d')
+        except ValueError:
+            pass
+    m = re.search(r'(\d{1,2})\.\s*(\d{1,2})\.', label)
+    if m:
+        try:
+            return datetime(datetime.now().year, int(m.group(2)), int(m.group(1))).strftime('%Y-%m-%d')
         except ValueError:
             pass
     return None
