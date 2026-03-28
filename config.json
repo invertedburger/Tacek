@@ -6,21 +6,24 @@
     "https://www.ilpaladar.cz/tydenni-menu/",
     "https://www.utesare.cz/poledni-nabidka/",
     "https://www.uhovezihopupku.cz/menu/",
-    "https://www.kometapub.cz/arena#jidelni"
+    "https://www.kometapub.cz/arena#jidelni",
+    "https://www.menicka.cz/api/iframe/?id=9582"
   ],
   "restaurant_names": {
     "www.iqrestaurant.cz":   "Holandska Brno Czech Republic",
     "www.utesare.cz":        "U Tesare Brno Czech Republic",
     "www.uhovezihopupku.cz": "Videnska 55 Brno",
     "www.kometapub.cz":      "Kometa Pub Brno Czech Republic",
-    "www.ilpaladar.cz":      "Il Paladar Brno Czech Republic"
+    "www.ilpaladar.cz":      "Il Paladar Brno Czech Republic",
+    "www.menicka.cz": "Herspicka 7 Brno Czech Republic"
   },
   "restaurant_display_names": {
     "www.iqrestaurant.cz":   "IQ Restaurant",
     "www.utesare.cz":        "U Tesaře",
     "www.uhovezihopupku.cz": "U Hovězího Pupku",
     "www.kometapub.cz":      "Kometa Pub",
-    "www.ilpaladar.cz":      "Il Paladar"
+    "www.ilpaladar.cz":      "Il Paladar",
+    "www.menicka.cz": "Buddha 2"
   },
   "restaurant_coords_override": {},
   "webpage_parsers": {
