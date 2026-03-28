@@ -73,8 +73,6 @@ def generate(data, restaurant_name, source_url, last_updated):
           <div class="flex gap-1">
             <button onclick="setFodmapFilter('all')"      data-filter="fodmap" data-value="all"
               class="chip-inactive px-2.5 py-1 rounded-full text-xs font-medium border">Vše</button>
-            <button onclick="setFodmapFilter('High')"     data-filter="fodmap" data-value="High"     data-color="red"
-              class="chip-inactive px-2.5 py-1 rounded-full text-xs font-medium border">Vysoký</button>
             <button onclick="setFodmapFilter('Moderate')" data-filter="fodmap" data-value="Moderate" data-color="amber"
               class="chip-inactive px-2.5 py-1 rounded-full text-xs font-medium border">Střední</button>
             <button onclick="setFodmapFilter('Low')"      data-filter="fodmap" data-value="Low"      data-color="green"
@@ -86,8 +84,6 @@ def generate(data, restaurant_name, source_url, last_updated):
           <div class="flex gap-1">
             <button onclick="setFitnessFilter('all')"    data-filter="fitness" data-value="all"
               class="chip-inactive px-2.5 py-1 rounded-full text-xs font-medium border">Vše</button>
-            <button onclick="setFitnessFilter('Low')"    data-filter="fitness" data-value="Low"    data-color="red"
-              class="chip-inactive px-2.5 py-1 rounded-full text-xs font-medium border">Slabé</button>
             <button onclick="setFitnessFilter('Medium')" data-filter="fitness" data-value="Medium" data-color="amber"
               class="chip-inactive px-2.5 py-1 rounded-full text-xs font-medium border">Dobré</button>
             <button onclick="setFitnessFilter('High')"   data-filter="fitness" data-value="High"   data-color="green"

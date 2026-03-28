@@ -26,8 +26,6 @@ def generate():
           class="chip-inactive px-3 py-1.5 rounded-full text-sm font-medium border">Nízký</button>
         <button onclick="setFodmapPref('Moderate')" data-pref-filter="fodmap" data-value="Moderate" data-color="amber"
           class="chip-inactive px-3 py-1.5 rounded-full text-sm font-medium border">Střední</button>
-        <button onclick="setFodmapPref('High')"     data-pref-filter="fodmap" data-value="High"     data-color="red"
-          class="chip-inactive px-3 py-1.5 rounded-full text-sm font-medium border">Vysoký</button>
       </div>
     </div>
 
@@ -37,8 +35,6 @@ def generate():
       <div class="flex flex-wrap gap-2">
         <button onclick="setFitnessPref('all')"    data-pref-filter="fitness" data-value="all"
           class="chip-inactive px-3 py-1.5 rounded-full text-sm font-medium border">Vše</button>
-        <button onclick="setFitnessPref('Low')"    data-pref-filter="fitness" data-value="Low"    data-color="red"
-          class="chip-inactive px-3 py-1.5 rounded-full text-sm font-medium border">Slabé</button>
         <button onclick="setFitnessPref('Medium')" data-pref-filter="fitness" data-value="Medium" data-color="amber"
           class="chip-inactive px-3 py-1.5 rounded-full text-sm font-medium border">Dobré</button>
         <button onclick="setFitnessPref('High')"   data-pref-filter="fitness" data-value="High"   data-color="green"

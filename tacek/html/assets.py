@@ -50,11 +50,13 @@ FILTER_JS = """
     let fitnessFilter = localStorage.getItem('fitnessFilter') || 'all';
     let todayOnly = true;
     const today = new Date().toISOString().slice(0, 10);
+    const _FODMAP_RANK  = { Low: 0, Moderate: 1, High: 2 };
+    const _FITNESS_RANK = { High: 0, Medium: 1, Low: 2 };
 
     function applyFilters() {
       document.querySelectorAll('[data-fodmap]').forEach(el => {
-        const showF   = fodmapFilter  === 'all' || el.dataset.fodmap  === fodmapFilter;
-        const showFit = fitnessFilter === 'all' || el.dataset.fitness === fitnessFilter;
+        const showF   = fodmapFilter  === 'all' || _FODMAP_RANK[el.dataset.fodmap]  <= _FODMAP_RANK[fodmapFilter];
+        const showFit = fitnessFilter === 'all' || _FITNESS_RANK[el.dataset.fitness] <= _FITNESS_RANK[fitnessFilter];
         const visible = showF && showFit;
         if (!visible && el.style.display !== 'none') {
           el.classList.add('filtering-out');

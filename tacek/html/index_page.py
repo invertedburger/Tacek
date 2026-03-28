@@ -1,9 +1,11 @@
+from datetime import datetime
 from urllib.parse import quote_plus
 from tacek.html.assets import CHIP_CSS, THEME_JS
 from tacek.html.components import head, fodmap_badge, fitness_badge, FODMAP_CZ, FITNESS_CZ
 
 
 def generate(sources, timestamp):
+    gen_date = datetime.now().strftime('%Y-%m-%d')
     cards_html = ''
     for i, src in enumerate(sources):
         name         = src['name']
@@ -33,7 +35,7 @@ def generate(sources, timestamp):
             </div>""" if rows else ''
 
         dishes_section = f"""
-          <div class="px-5 py-3 border-t border-gray-100 dark:border-gray-700">
+          <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700">
             <p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5">Doporučujeme dnes</p>
             {col_headers}
             {rows}
@@ -158,6 +160,14 @@ def generate(sources, timestamp):
 
   <script>
     {THEME_JS}
+    const _menuDate = "{gen_date}";
+    (function() {{
+      const _today = new Date().toISOString().slice(0, 10);
+      const _dow   = new Date().getDay();
+      if (_dow === 0 || _dow === 6 || _today !== _menuDate) {{
+        document.querySelectorAll('.recommend-section').forEach(el => el.style.display = 'none');
+      }}
+    }})();
   </script>
 {map_script}
 </body>
