@@ -21,8 +21,8 @@ def generate(sources, timestamp):
             <div class="flex items-center gap-2 py-1.5 border-b border-gray-50 dark:border-gray-700/60 last:border-0">
               <a href="https://www.google.com/search?tbm=isch&q={quote_plus(d['name'])}" target="_blank" rel="noopener"
                  class="flex-1 text-sm text-gray-700 dark:text-gray-200 truncate hover:text-green-600 dark:hover:text-green-400 transition-colors">{dn}</a>
-              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded text-xs font-medium {fodmap_badge(d['fodmap'])}">{fl}</span>
-              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded text-xs font-medium {fitness_badge(d['fitness'])}">{fit}</span>
+              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fodmap_badge(d['fodmap'])}">{fl}</span>
+              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fitness_badge(d['fitness'])}">{fit}</span>
             </div>"""
 
         col_headers = """
@@ -54,7 +54,7 @@ def generate(sources, timestamp):
         {dishes_section}
         <div class="px-5 py-4 mt-auto">
           <a href="{result_file}"
-             class="block text-center bg-green-600 hover:bg-green-700 dark:bg-green-800 dark:hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium transition-colors">
+             class="block text-center border border-green-600 text-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-900/20 py-2 rounded-lg text-sm font-medium transition-colors">
             Zobrazit celé menu &rarr;
           </a>
         </div>

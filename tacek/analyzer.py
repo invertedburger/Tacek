@@ -1,10 +1,10 @@
 import re
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from tacek.config import API_KEY, GEMINI_MODEL
 
-genai.configure(api_key=API_KEY)
-_model = genai.GenerativeModel(GEMINI_MODEL)
+_client = genai.Client(api_key=API_KEY)
 
 JSON_PROMPT = """Extract all foods from this menu. Return ONLY valid JSON with this exact structure, no markdown, no code fences, no extra text:
 {
@@ -32,7 +32,7 @@ Rules:
 - Always keep original Czech food names
 - protein_g, carbs_g, fat_g, calories_kcal are estimated integers"""
 
-_JSON_CONFIG = genai.GenerationConfig(response_mime_type="application/json")
+_JSON_CONFIG = types.GenerateContentConfig(response_mime_type="application/json")
 
 
 def _parse(text):
@@ -43,8 +43,12 @@ def _parse(text):
 
 def analyze_pdf(pdf_path):
     try:
-        uploaded = genai.upload_file(pdf_path)
-        response = _model.generate_content([JSON_PROMPT, uploaded], generation_config=_JSON_CONFIG)
+        uploaded = _client.files.upload(file=pdf_path)
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[JSON_PROMPT, uploaded],
+            config=_JSON_CONFIG,
+        )
         return _parse(response.text)
     except Exception as e:
         print(f"ERROR analyzing {pdf_path}: {e}")
@@ -53,19 +57,27 @@ def analyze_pdf(pdf_path):
 
 def analyze_text(text, source_name):
     prompt = JSON_PROMPT + f"\n\nHere is the menu text from {source_name}:\n{text}"
-    response = _model.generate_content(prompt, generation_config=_JSON_CONFIG)
     try:
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=_JSON_CONFIG,
+        )
         return _parse(response.text)
     except Exception as e:
-        print(f"ERROR parsing {source_name}: {e}\nPreview: {response.text[:300]}")
+        print(f"ERROR parsing {source_name}: {e}")
         return None
 
 
 def analyze_image(image_path):
     print(f"Analyzing image with Gemini: {image_path}")
     try:
-        uploaded = genai.upload_file(image_path)
-        response = _model.generate_content([JSON_PROMPT, uploaded], generation_config=_JSON_CONFIG)
+        uploaded = _client.files.upload(file=image_path)
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[JSON_PROMPT, uploaded],
+            config=_JSON_CONFIG,
+        )
         return _parse(response.text)
     except Exception as e:
         print(f"ERROR analyzing image {image_path}: {e}")

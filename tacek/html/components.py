@@ -8,18 +8,18 @@ FITNESS_CZ = {'Low': 'Slabé', 'Medium': 'Dobré', 'High': 'Výborné'}
 
 def fodmap_badge(level):
     return {
-        'Low':      'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400',
-        'Moderate': 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400',
-        'High':     'bg-red-100   text-red-700   dark:bg-red-900/50   dark:text-red-400',
-    }.get(level, 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400')
+        'Low':      'border border-green-300 text-green-600 dark:border-green-700 dark:text-green-400',
+        'Moderate': 'border border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400',
+        'High':     'border border-red-300   text-red-600   dark:border-red-700   dark:text-red-400',
+    }.get(level, 'border border-gray-200 text-gray-500 dark:border-gray-600 dark:text-gray-400')
 
 
 def fitness_badge(level):
     return {
-        'High':   'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400',
-        'Medium': 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400',
-        'Low':    'bg-red-100   text-red-600   dark:bg-red-900/50   dark:text-red-400',
-    }.get(level, 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400')
+        'High':   'border border-green-300 text-green-600 dark:border-green-700 dark:text-green-400',
+        'Medium': 'border border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400',
+        'Low':    'border border-red-300   text-red-600   dark:border-red-700   dark:text-red-400',
+    }.get(level, 'border border-gray-200 text-gray-500 dark:border-gray-600 dark:text-gray-400')
 
 
 def stars_to_level(stars):
