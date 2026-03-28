@@ -42,12 +42,12 @@ def _parse(text):
 
 
 def analyze_pdf(pdf_path):
-    uploaded = genai.upload_file(pdf_path)
-    response = _model.generate_content([JSON_PROMPT, uploaded], generation_config=_JSON_CONFIG)
     try:
+        uploaded = genai.upload_file(pdf_path)
+        response = _model.generate_content([JSON_PROMPT, uploaded], generation_config=_JSON_CONFIG)
         return _parse(response.text)
     except Exception as e:
-        print(f"ERROR parsing {pdf_path}: {e}\nPreview: {response.text[:300]}")
+        print(f"ERROR analyzing {pdf_path}: {e}")
         return None
 
 
@@ -63,10 +63,10 @@ def analyze_text(text, source_name):
 
 def analyze_image(image_path):
     print(f"Analyzing image with Gemini: {image_path}")
-    uploaded = genai.upload_file(image_path)
-    response = _model.generate_content([JSON_PROMPT, uploaded], generation_config=_JSON_CONFIG)
     try:
+        uploaded = genai.upload_file(image_path)
+        response = _model.generate_content([JSON_PROMPT, uploaded], generation_config=_JSON_CONFIG)
         return _parse(response.text)
     except Exception as e:
-        print(f"ERROR parsing image {image_path}: {e}\nPreview: {response.text[:300]}")
+        print(f"ERROR analyzing image {image_path}: {e}")
         return None
