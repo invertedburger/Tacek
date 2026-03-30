@@ -6,7 +6,7 @@ from datetime import datetime
 from tacek import config
 from tacek.downloader import (
     download_file, download_webpage, download_image,
-    extract_menu_text, find_menu_images, file_hash, text_hash,
+    extract_menu_text, find_menu_images, file_hash, text_hash, image_content_hash,
 )
 from tacek.analyzer import analyze_pdf, analyze_text, analyze_image
 from tacek.ftp import upload
@@ -84,7 +84,7 @@ def process_all_webpages(webpage_links):
 
         if parser == 'image':
             image_urls = find_menu_images(html_content, url)
-            cache_key  = text_hash(','.join(sorted(image_urls)))
+            cache_key  = image_content_hash(image_urls)
         else:
             cache_key  = text_hash(menu_text)
             image_urls = []

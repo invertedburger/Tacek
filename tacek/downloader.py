@@ -62,3 +62,14 @@ def file_hash(path):
 
 def text_hash(text):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+
+def image_content_hash(urls):
+    sha = hashlib.sha256()
+    for url in sorted(urls):
+        try:
+            r = requests.get(url, timeout=15)
+            sha.update(r.content)
+        except Exception:
+            sha.update(url.encode('utf-8'))
+    return sha.hexdigest()
