@@ -1,5 +1,7 @@
 import re
 import json
+import os
+import tempfile
 from google import genai
 from google.genai import types
 from tacek.config import API_KEY, GEMINI_MODEL
@@ -51,7 +53,30 @@ def analyze_pdf(pdf_path):
         )
         return _parse(response.text)
     except Exception as e:
-        print(f"ERROR analyzing {pdf_path}: {e}")
+        print(f"WARNING: Gemini file API failed for {pdf_path}: {e}")
+        print("Falling back to image rendering...")
+        return _analyze_pdf_as_images(pdf_path)
+
+
+def _analyze_pdf_as_images(pdf_path):
+    try:
+        import fitz
+    except ImportError:
+        print("ERROR: pymupdf not installed, cannot render PDF as images.")
+        return None
+    try:
+        doc = fitz.open(pdf_path)
+        merged = {'days': []}
+        with tempfile.TemporaryDirectory() as tmp:
+            for i, page in enumerate(doc):
+                img_path = os.path.join(tmp, f"page_{i}.png")
+                page.get_pixmap(dpi=150).save(img_path)
+                data = analyze_image(img_path)
+                if data:
+                    merged['days'].extend(data.get('days', []))
+        return merged if merged['days'] else None
+    except Exception as e:
+        print(f"ERROR rendering PDF as images {pdf_path}: {e}")
         return None
 
 

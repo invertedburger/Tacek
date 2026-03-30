@@ -50,7 +50,8 @@ def process_all_pdfs(pdf_links):
             print(f"Analyzing {pdf_path} with Gemini...")
             data = analyze_pdf(pdf_path)
             if data is None:
-                print(f"Skipping {fname} due to parse error.")
+                print(f"No menu data for {fname}, marking as unavailable.")
+                sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
                 continue
             _save_json(data, data_path)
             processed[fname] = fhash
@@ -95,7 +96,8 @@ def process_all_webpages(webpage_links):
             print(f"Analyzing {url} with Gemini...")
             data = _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_name)
             if data is None:
-                print(f"Skipping {url} due to parse error.")
+                print(f"No menu data for {url}, marking as unavailable.")
+                sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
                 continue
             _save_json(data, data_path)
             processed[url] = cache_key
@@ -113,6 +115,9 @@ def create_index_html(results_dir, sources):
     sources = geocode(sources)
 
     for src in sources:
+        if src.get('no_menu') or not src.get('result_file'):
+            src['top_dishes'] = []
+            continue
         data_path = os.path.join(results_dir, src['result_file'].replace('_results.html', '_data.json'))
         try:
             src['top_dishes'] = get_top_dishes(_load_json(data_path))

@@ -65,7 +65,17 @@ Get a Gemini API key at [aistudio.google.com](https://aistudio.google.com).
 python run.py
 ```
 
-Results are written to `results/` and uploaded to FTP.
+Results are written to `results/` and deployed to GitHub Pages at [jidlo.ivomartisek.cz](https://jidlo.ivomartisek.cz).
+
+## Automation
+
+The site is rebuilt automatically via GitHub Actions (`.github/workflows/build.yml`):
+
+- **Scheduled** — Mon–Fri at 08:00 UTC (09:00 CET / 10:00 CEST)
+- **On push** — every push to `main` triggers a rebuild
+- **Manual** — can be triggered via `workflow_dispatch` in the Actions tab
+
+The workflow restores cached menu downloads and Gemini analysis results between runs (keyed on `tacek-data-*`) so only changed menus are re-analyzed. The `GEMINI_API_KEY` must be set as a repository secret.
 
 ## Configuration
 
