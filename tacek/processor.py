@@ -35,12 +35,12 @@ def process_all_pdfs(pdf_links):
         pdf_path = download_file(url, config.DOWNLOAD_DIR)
         fhash = file_hash(pdf_path)
         fname = os.path.basename(pdf_path)
-        base = os.path.splitext(fname)[0]
-        result_name = f"{base}_results.html"
-        data_name   = f"{base}_data.json"
+        domain = urlparse(url).netloc
+        source_name = domain.replace('.', '_')
+        result_name = f"{source_name}_results.html"
+        data_name   = f"{source_name}_data.json"
         result_path = os.path.join(config.RESULTS_DIR, result_name)
         data_path   = os.path.join(config.RESULTS_DIR, data_name)
-        domain = urlparse(url).netloc
         restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
 
         if fname in processed and processed[fname] == fhash and os.path.exists(data_path):
