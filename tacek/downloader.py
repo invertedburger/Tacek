@@ -4,12 +4,13 @@ import requests
 from urllib.parse import urlparse, urljoin
 from datetime import datetime
 from bs4 import BeautifulSoup
+from tacek.logger import log
 
 
 def download_file(url, dest_folder):
     filename = os.path.basename(urlparse(url).path) or f"menu_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     dest_path = os.path.join(dest_folder, filename)
-    print(f"Downloading {url}...")
+    log(f"Downloading {url}...")
     r = requests.get(url, timeout=30)
     with open(dest_path, 'wb') as f:
         f.write(r.content)
@@ -17,7 +18,7 @@ def download_file(url, dest_folder):
 
 
 def download_webpage(url):
-    print(f"Downloading web page: {url}...")
+    log(f"Downloading web page: {url}...")
     r = requests.get(url, timeout=30)
     r.encoding = r.apparent_encoding
     return r.text
@@ -28,7 +29,7 @@ def download_image(url, dest_folder):
     if not filename or '.' not in filename:
         filename = f"menu_img_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
     dest_path = os.path.join(dest_folder, filename)
-    print(f"Downloading menu image: {url}...")
+    log(f"Downloading menu image: {url}...")
     r = requests.get(url, timeout=30)
     with open(dest_path, 'wb') as f:
         f.write(r.content)

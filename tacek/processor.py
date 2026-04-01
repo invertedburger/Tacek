@@ -12,7 +12,8 @@ from tacek.analyzer import analyze_pdf, analyze_text, analyze_image
 from tacek.ftp import upload
 from tacek.ranking import get_top_dishes
 from tacek.geocoder import geocode
-from tacek.html import menu_page, index_page, profile_page
+from tacek.html import menu_page, index_page, profile_page, logs_page
+from tacek.logger import log
 
 
 def split_links(pdf_links, webpage_links):
@@ -44,13 +45,13 @@ def process_all_pdfs(pdf_links):
         restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
 
         if fname in processed and processed[fname] == fhash and os.path.exists(data_path):
-            print(f"No change in {fname}, regenerating HTML from cache.")
+            log(f"No change in {fname}, regenerating HTML from cache.")
             data = _load_json(data_path)
         else:
-            print(f"Analyzing {pdf_path} with Gemini...")
+            log(f"Analyzing {pdf_path} with Gemini...")
             data = analyze_pdf(pdf_path)
             if data is None:
-                print(f"No menu data for {fname}, marking as unavailable.")
+                log(f"No menu data for {fname}, marking as unavailable.")
                 sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
                 continue
             _save_json(data, data_path)
@@ -90,13 +91,13 @@ def process_all_webpages(webpage_links):
             image_urls = []
 
         if url in processed and processed[url] == cache_key and os.path.exists(data_path):
-            print(f"No change in {url}, regenerating HTML from cache.")
+            log(f"No change in {url}, regenerating HTML from cache.")
             data = _load_json(data_path)
         else:
-            print(f"Analyzing {url} with Gemini...")
+            log(f"Analyzing {url} with Gemini...")
             data = _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_name)
             if data is None:
-                print(f"No menu data for {url}, marking as unavailable.")
+                log(f"No menu data for {url}, marking as unavailable.")
                 sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
                 continue
             _save_json(data, data_path)
@@ -108,6 +109,21 @@ def process_all_webpages(webpage_links):
         sources.append({'name': restaurant_name, 'url': url, 'result_file': result_name, 'last_updated': timestamp})
 
     return sources
+
+
+def create_logs_html(results_dir):
+    log_path = os.path.join(results_dir, 'run_log.json')
+    if os.path.exists(log_path):
+        log_data = _load_json(log_path)
+    else:
+        log_data = None
+
+    logs_html = logs_page.generate(log_data)
+    logs_path = os.path.join(results_dir, 'logs.html')
+    with open(logs_path, 'w', encoding='utf-8') as f:
+        f.write(logs_html)
+    log(f"Logs page written to {logs_path}")
+    upload(logs_path, 'logs.html')
 
 
 def create_index_html(results_dir, sources):
@@ -127,13 +143,13 @@ def create_index_html(results_dir, sources):
     index_path = os.path.join(results_dir, 'index.html')
     with open(index_path, 'w', encoding='utf-8') as f:
         f.write(index_page.generate(sources, timestamp))
-    print(f"Index page written to {index_path}")
+    log(f"Index page written to {index_path}")
     upload(index_path, 'index.html')
 
     profile_path = os.path.join(results_dir, 'profile.html')
     with open(profile_path, 'w', encoding='utf-8') as f:
         f.write(profile_page.generate())
-    print(f"Profile page written to {profile_path}")
+    log(f"Profile page written to {profile_path}")
     upload(profile_path, 'profile.html')
 
 
@@ -144,7 +160,7 @@ def _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_
         if not image_urls:
             image_urls = find_menu_images(html_content, url)
         if image_urls:
-            print(f"Found {len(image_urls)} menu image(s), analyzing...")
+            log(f"Found {len(image_urls)} menu image(s), analyzing...")
             merged = {'days': []}
             for img_url in image_urls:
                 try:
@@ -153,9 +169,9 @@ def _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_
                     if img_data:
                         merged['days'].extend(img_data.get('days', []))
                 except Exception as e:
-                    print(f"WARNING: Failed to process image {img_url}: {e}")
+                    log(f"WARNING: Failed to process image {img_url}: {e}")
             return merged if merged['days'] else None
-        print("No menu images found, falling back to text analysis.")
+        log("No menu images found, falling back to text analysis.")
     return analyze_text(menu_text, source_name)
 
 
@@ -189,5 +205,5 @@ def _save_json(data, path):
 def _write_and_upload(html, local_path, remote_name):
     with open(local_path, 'w', encoding='utf-8') as f:
         f.write(html)
-    print(f"Saved {local_path}")
+    log(f"Saved {local_path}")
     upload(local_path, remote_name)

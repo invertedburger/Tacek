@@ -141,6 +141,7 @@ def generate(sources, timestamp):
         <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Ob&#283;dy v okol&iacute; Holandsk&eacute; &middot; FODMAP &amp; v&yacute;&#382;iva</p>
       </div>
       <div class="flex items-center gap-1">
+        <a href="logs.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm" title="Logy">📋</a>
         <a href="profile.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-base" title="Nastavení">&#9881;</a>
         <button id="themeBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Přepnout motiv"></button>
       </div>

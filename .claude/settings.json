@@ -3,7 +3,15 @@
     "allow": [
       "WebSearch",
       "Bash(grep -E \"\\\\.py$\")",
-      "Bash(python -m http.server 8000 --directory results)"
+      "Bash(python -m http.server 8000 --directory results)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.iqrestaurant.cz)",
+      "Bash(ls results/*iq*)",
+      "Bash(curl -s -L \"https://www.iqrestaurant.cz/brno/menu.pdf\" -o /tmp/iq_menu_test.pdf)",
+      "Bash(python3 -c \"import hashlib; print\\(hashlib.sha256\\(open\\(''/tmp/iq_menu_test.pdf'',''rb''\\).read\\(\\)\\).hexdigest\\(\\)\\)\")",
+      "Bash(curl -v \"https://www.iqrestaurant.cz/brno/menu.pdf\" -o /tmp/iq_menu_test.pdf --max-time 30)",
+      "Bash(python3 -c \"import hashlib; data=open\\(''/tmp/iq_menu_test.pdf'',''rb''\\).read\\(\\); print\\(f''sha256: {hashlib.sha256\\(data\\).hexdigest\\(\\)}''\\); print\\(f''size: {len\\(data\\)}''\\)\")",
+      "Bash(python3 -c \":*)"
     ]
   }
 }

@@ -5,6 +5,7 @@ import tempfile
 from google import genai
 from google.genai import types
 from tacek.config import API_KEY, GEMINI_MODEL
+from tacek.logger import log
 
 _client = genai.Client(api_key=API_KEY)
 
@@ -53,8 +54,8 @@ def analyze_pdf(pdf_path):
         )
         return _parse(response.text)
     except Exception as e:
-        print(f"WARNING: Gemini file API failed for {pdf_path}: {e}")
-        print("Falling back to image rendering...")
+        log(f"WARNING: Gemini file API failed for {pdf_path}: {e}")
+        log("Falling back to image rendering...")
         return _analyze_pdf_as_images(pdf_path)
 
 
@@ -62,7 +63,7 @@ def _analyze_pdf_as_images(pdf_path):
     try:
         import fitz
     except ImportError:
-        print("ERROR: pymupdf not installed, cannot render PDF as images.")
+        log("ERROR: pymupdf not installed, cannot render PDF as images.")
         return None
     try:
         doc = fitz.open(pdf_path)
@@ -70,13 +71,29 @@ def _analyze_pdf_as_images(pdf_path):
         with tempfile.TemporaryDirectory() as tmp:
             for i, page in enumerate(doc):
                 img_path = os.path.join(tmp, f"page_{i}.png")
-                page.get_pixmap(dpi=150).save(img_path)
+                page.get_pixmap(dpi=200).save(img_path)
                 data = analyze_image(img_path)
                 if data:
                     merged['days'].extend(data.get('days', []))
-        return merged if merged['days'] else None
+        if merged['days']:
+            return merged
+        log("Image analysis returned no data, trying text extraction...")
+        return _analyze_pdf_as_text(doc, pdf_path)
     except Exception as e:
-        print(f"ERROR rendering PDF as images {pdf_path}: {e}")
+        log(f"ERROR rendering PDF as images {pdf_path}: {e}")
+        return None
+
+
+def _analyze_pdf_as_text(doc, pdf_path):
+    try:
+        text = '\n'.join(page.get_text() for page in doc).strip()
+        if len(text) < 50:
+            log("PDF text extraction yielded too little text.")
+            return None
+        log(f"Extracted {len(text)} chars from PDF, sending to Gemini as text...")
+        return analyze_text(text, os.path.basename(pdf_path))
+    except Exception as e:
+        log(f"ERROR extracting text from PDF {pdf_path}: {e}")
         return None
 
 
@@ -90,12 +107,12 @@ def analyze_text(text, source_name):
         )
         return _parse(response.text)
     except Exception as e:
-        print(f"ERROR parsing {source_name}: {e}")
+        log(f"ERROR parsing {source_name}: {e}")
         return None
 
 
 def analyze_image(image_path):
-    print(f"Analyzing image with Gemini: {image_path}")
+    log(f"Analyzing image with Gemini: {image_path}")
     try:
         uploaded = _client.files.upload(file=image_path)
         response = _client.models.generate_content(
@@ -105,5 +122,5 @@ def analyze_image(image_path):
         )
         return _parse(response.text)
     except Exception as e:
-        print(f"ERROR analyzing image {image_path}: {e}")
+        log(f"ERROR analyzing image {image_path}: {e}")
         return None
