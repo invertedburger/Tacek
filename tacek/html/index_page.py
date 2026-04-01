@@ -64,6 +64,20 @@ def generate(sources, timestamp):
             {rows}
           </div>""" if rows else ''
 
+        stale = src.get('stale_menu', False)
+        if stale:
+            button_html = f"""
+          <a href="{result_file}"
+             class="block text-center border border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/40 py-2 rounded-lg text-sm font-medium transition-colors">
+            Menu z minulého dne &rarr;
+          </a>"""
+        else:
+            button_html = f"""
+          <a href="{result_file}"
+             class="block text-center border border-green-600 text-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-900/20 py-2 rounded-lg text-sm font-medium transition-colors">
+            Zobrazit celé menu &rarr;
+          </a>"""
+
         cards_html += f"""
       <div class="anim-card card-hover bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col" style="animation-delay:{i * 80}ms">
         <div class="px-5 pt-5 pb-4 flex items-start justify-between gap-3">
@@ -78,10 +92,7 @@ def generate(sources, timestamp):
         </div>
         {dishes_section}
         <div class="px-5 py-4 mt-auto">
-          <a href="{result_file}"
-             class="block text-center border border-green-600 text-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-900/20 py-2 rounded-lg text-sm font-medium transition-colors">
-            Zobrazit celé menu &rarr;
-          </a>
+          {button_html}
         </div>
       </div>"""
 

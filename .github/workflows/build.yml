@@ -2,7 +2,7 @@ name: Build & Deploy
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5'   # Mon–Fri 8:00 UTC = 9/10 CET/CEST
+    - cron: '10 8 * * 1-5'  # Mon–Fri 8:10 UTC = 9:10 CET / 10:10 CEST
   push:
     branches: [main]
   workflow_dispatch:
@@ -59,15 +59,18 @@ jobs:
         run: python run.py
 
       - name: Add CNAME
+        if: always()
         run: echo "jidlo.ivomartisek.cz" > results/CNAME
 
       - name: Upload Pages artifact
+        if: always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: results/
 
   deploy:
     needs: build
+    if: always()
     runs-on: ubuntu-latest
     environment:
       name: github-pages

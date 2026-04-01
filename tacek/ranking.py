@@ -46,6 +46,15 @@ def _stars_to_level(stars):
     return 'High' if s >= 4 else ('Medium' if s >= 3 else 'Low')
 
 
+def has_today_menu(data):
+    today = datetime.now().strftime('%Y-%m-%d')
+    for day in data.get('days', []):
+        date_str = _parse_date(day.get('day', ''))
+        if not date_str or date_str == today:
+            return True
+    return False
+
+
 def get_top_dishes(data, n=3):
     today = datetime.now().strftime('%Y-%m-%d')
     scored = []
@@ -63,7 +72,9 @@ def get_top_dishes(data, n=3):
             score = _FODMAP_SCORE.get(fodmap, 2) + _FITNESS_SCORE.get(fitness, 2)
             scored.append({'name': name, 'fodmap': fodmap, 'fitness': fitness, 'score': score, 'today': is_today})
 
-    pool = [d for d in scored if d['today']] or scored
+    pool = [d for d in scored if d['today']]
+    if not pool:
+        return []
     pool.sort(key=lambda d: d['score'], reverse=True)
     seen, result = set(), []
     for d in pool:

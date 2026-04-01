@@ -10,7 +10,7 @@ from tacek.downloader import (
 )
 from tacek.analyzer import analyze_pdf, analyze_text, analyze_image
 from tacek.ftp import upload
-from tacek.ranking import get_top_dishes
+from tacek.ranking import get_top_dishes, has_today_menu
 from tacek.geocoder import geocode
 from tacek.html import menu_page, index_page, profile_page, logs_page
 from tacek.logger import log
@@ -136,9 +136,12 @@ def create_index_html(results_dir, sources):
             continue
         data_path = os.path.join(results_dir, src['result_file'].replace('_results.html', '_data.json'))
         try:
-            src['top_dishes'] = get_top_dishes(_load_json(data_path))
+            data = _load_json(data_path)
+            src['top_dishes'] = get_top_dishes(data)
+            src['stale_menu'] = not has_today_menu(data)
         except Exception:
             src['top_dishes'] = []
+            src['stale_menu'] = False
 
     index_path = os.path.join(results_dir, 'index.html')
     with open(index_path, 'w', encoding='utf-8') as f:
