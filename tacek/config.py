@@ -20,7 +20,8 @@ RESULTS_DIR                = _cfg.get('results_dir', 'results')
 MIN_MENU_TEXT_LENGTH       = _cfg.get('min_menu_text_length', 200)
 GEMINI_MODEL               = _cfg.get('gemini_model', 'models/gemini-2.5-flash')
 
-API_KEY  = _sec['gemini_api_key']
+API_KEY      = _sec['gemini_api_key']
+GROQ_API_KEY = _sec.get('groq_api_key', '')
 FTP_HOST = _sec['ftp_host']
 FTP_USER = _sec['ftp_user']
 FTP_PASS = _sec['ftp_pass']

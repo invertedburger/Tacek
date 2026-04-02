@@ -1,13 +1,25 @@
 import re
 import json
 import os
+import base64
 import tempfile
 from google import genai
 from google.genai import types
-from tacek.config import API_KEY, GEMINI_MODEL
+from tacek.config import API_KEY, GEMINI_MODEL, GROQ_API_KEY
 from tacek.logger import log
 
 _client = genai.Client(api_key=API_KEY)
+
+_groq_client = None
+if GROQ_API_KEY:
+    try:
+        from openai import OpenAI
+        _groq_client = OpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=GROQ_API_KEY,
+        )
+    except ImportError:
+        log("WARNING: openai package not installed, Groq fallback disabled.")
 
 JSON_PROMPT = """Extract all foods from this menu. Return ONLY valid JSON with this exact structure, no markdown, no code fences, no extra text:
 {
@@ -37,11 +49,56 @@ Rules:
 
 _JSON_CONFIG = types.GenerateContentConfig(response_mime_type="application/json")
 
+_GROQ_TEXT_MODEL  = "llama-3.3-70b-versatile"
+_GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+
 
 def _parse(text):
     text = re.sub(r'```json\s*', '', text)
     text = re.sub(r'```\s*', '', text)
     return json.loads(text.strip())
+
+
+def _groq_text(text, source_name):
+    if not _groq_client:
+        return None
+    try:
+        log(f"Trying Groq fallback for {source_name}...")
+        resp = _groq_client.chat.completions.create(
+            model=_GROQ_TEXT_MODEL,
+            messages=[{"role": "user", "content": JSON_PROMPT + f"\n\nHere is the menu text from {source_name}:\n{text}"}],
+            response_format={"type": "json_object"},
+        )
+        return _parse(resp.choices[0].message.content)
+    except Exception as e:
+        log(f"ERROR: Groq text fallback failed for {source_name}: {e}")
+        return None
+
+
+def _groq_image(image_path):
+    if not _groq_client:
+        return None
+    try:
+        log(f"Trying Groq vision fallback for {image_path}...")
+        with open(image_path, 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode()
+        ext = os.path.splitext(image_path)[1].lower().lstrip('.')
+        mime = f"image/{ext}" if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp') else "image/jpeg"
+        resp = _groq_client.chat.completions.create(
+            model=_GROQ_VISION_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": JSON_PROMPT},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                ],
+            }],
+            response_format={"type": "json_object"},
+        )
+        return _parse(resp.choices[0].message.content)
+    except Exception as e:
+        log(f"ERROR: Groq vision fallback failed for {image_path}: {e}")
+        return None
 
 
 def analyze_pdf(pdf_path):
@@ -107,12 +164,13 @@ def analyze_text(text, source_name):
         )
         return _parse(response.text)
     except Exception as e:
-        log(f"ERROR parsing {source_name}: {e}")
-        return None
+        log(f"ERROR parsing {source_name} with Gemini: {e}")
+        return _groq_text(text, source_name)
 
 
 def analyze_image(image_path):
     log(f"Analyzing image with Gemini: {image_path}")
+    result = None
     try:
         uploaded = _client.files.upload(file=image_path)
         response = _client.models.generate_content(
@@ -120,7 +178,11 @@ def analyze_image(image_path):
             contents=[JSON_PROMPT, uploaded],
             config=_JSON_CONFIG,
         )
-        return _parse(response.text)
+        result = _parse(response.text)
     except Exception as e:
-        log(f"ERROR analyzing image {image_path}: {e}")
-        return None
+        log(f"ERROR analyzing image {image_path} with Gemini: {e}")
+
+    if not result or not result.get('days'):
+        result = _groq_image(image_path)
+
+    return result

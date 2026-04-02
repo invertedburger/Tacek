@@ -44,10 +44,16 @@ def process_all_pdfs(pdf_links):
         data_path   = os.path.join(config.RESULTS_DIR, data_name)
         restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
 
+        data = None
         if fname in processed and processed[fname] == fhash and os.path.exists(data_path):
-            log(f"No change in {fname}, regenerating HTML from cache.")
-            data = _load_json(data_path)
-        else:
+            cached = _load_json(data_path)
+            if has_today_menu(cached):
+                log(f"No change in {fname}, regenerating HTML from cache.")
+                data = cached
+            else:
+                log(f"Cache for {fname} is stale, re-analyzing...")
+
+        if data is None:
             log(f"Analyzing {pdf_path} with Gemini...")
             data = analyze_pdf(pdf_path)
             if data is None:
@@ -90,10 +96,16 @@ def process_all_webpages(webpage_links):
             cache_key  = text_hash(menu_text)
             image_urls = []
 
+        data = None
         if url in processed and processed[url] == cache_key and os.path.exists(data_path):
-            log(f"No change in {url}, regenerating HTML from cache.")
-            data = _load_json(data_path)
-        else:
+            cached = _load_json(data_path)
+            if has_today_menu(cached):
+                log(f"No change in {url}, regenerating HTML from cache.")
+                data = cached
+            else:
+                log(f"Cache for {url} is stale, re-analyzing...")
+
+        if data is None:
             log(f"Analyzing {url} with Gemini...")
             data = _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_name)
             if data is None:
