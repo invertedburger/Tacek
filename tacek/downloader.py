@@ -6,12 +6,20 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from tacek.logger import log
 
+_HEADERS = {
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/124.0.0.0 Safari/537.36'
+    )
+}
+
 
 def download_file(url, dest_folder):
     filename = os.path.basename(urlparse(url).path) or f"menu_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     dest_path = os.path.join(dest_folder, filename)
     log(f"Downloading {url}...")
-    r = requests.get(url, timeout=30)
+    r = requests.get(url, timeout=30, headers=_HEADERS)
     with open(dest_path, 'wb') as f:
         f.write(r.content)
     return dest_path
@@ -19,7 +27,7 @@ def download_file(url, dest_folder):
 
 def download_webpage(url):
     log(f"Downloading web page: {url}...")
-    r = requests.get(url, timeout=30)
+    r = requests.get(url, timeout=30, headers=_HEADERS)
     r.encoding = r.apparent_encoding
     return r.text
 
@@ -30,7 +38,7 @@ def download_image(url, dest_folder):
         filename = f"menu_img_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
     dest_path = os.path.join(dest_folder, filename)
     log(f"Downloading menu image: {url}...")
-    r = requests.get(url, timeout=30)
+    r = requests.get(url, timeout=30, headers=_HEADERS)
     with open(dest_path, 'wb') as f:
         f.write(r.content)
     return dest_path

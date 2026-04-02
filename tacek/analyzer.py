@@ -101,9 +101,23 @@ def _groq_image(image_path):
         return None
 
 
-def analyze_pdf(pdf_path):
+def _resave_pdf(pdf_path):
+    """Re-save PDF with PyMuPDF to normalize structure (fixes 'no pages' Gemini error)."""
     try:
-        uploaded = _client.files.upload(file=pdf_path)
+        import fitz
+        doc = fitz.open(pdf_path)
+        out = pdf_path + '.normalized.pdf'
+        doc.save(out, garbage=4, deflate=True, clean=True)
+        return out
+    except Exception as e:
+        log(f"WARNING: PDF re-save failed: {e}")
+        return pdf_path
+
+
+def analyze_pdf(pdf_path):
+    normalized = _resave_pdf(pdf_path)
+    try:
+        uploaded = _client.files.upload(file=normalized)
         response = _client.models.generate_content(
             model=GEMINI_MODEL,
             contents=[JSON_PROMPT, uploaded],
