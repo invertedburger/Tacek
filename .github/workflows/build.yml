@@ -2,7 +2,7 @@ name: Build & Deploy
 
 on:
   schedule:
-    - cron: '10 8 * * 1-5'  # Mon–Fri 8:10 UTC = 9:10 CET / 10:10 CEST
+    - cron: '0 8 * * 1-5'   # Mon–Fri 8:00 UTC = 9:00 CET / 10:00 CEST
   push:
     branches: [main]
   workflow_dispatch:
@@ -46,11 +46,13 @@ jobs:
       - name: Create secrets.json
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           python -c "
           import json, os
           json.dump({
               'gemini_api_key': os.environ['GEMINI_API_KEY'],
+              'groq_api_key': os.environ.get('GROQ_API_KEY', ''),
               'ftp_host': '', 'ftp_user': '', 'ftp_pass': '', 'ftp_dir': ''
           }, open('secrets.json', 'w'))
           "
