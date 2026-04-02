@@ -51,14 +51,40 @@ def extract_menu_text(html):
 
 
 def find_menu_images(html, page_url):
+    import re as _re
     soup = BeautifulSoup(html, 'html.parser')
     keywords = ['menu', 'jidel', 'nabidka', 'denni', 'tydenni', 'lunch', 'poledni']
-    images = []
+
+    # base_key → (url, width) — keep only the widest version of each image
+    best = {}
+
+    def _add(src, width=0):
+        src = src.strip()
+        if not src or not any(kw in src.lower() for kw in keywords):
+            return
+        url = urljoin(page_url, src)
+        # Strip the -WxH WordPress size suffix to get a stable base key
+        base = _re.sub(r'-\d+x\d+(\.[^.]+)$', r'\1', os.path.basename(url))
+        if base not in best or width > best[base][1]:
+            best[base] = (url, width)
+
     for img in soup.find_all('img'):
-        src = img.get('src') or img.get('data-src') or img.get('data-lazy-src') or ''
-        if src and any(kw in src.lower() for kw in keywords):
-            images.append(urljoin(page_url, src))
-    return images
+        for attr in ('src', 'data-src', 'data-lazy-src', 'data-orig-file'):
+            val = img.get(attr, '')
+            if val:
+                _add(val)
+        for attr in ('srcset', 'data-srcset'):
+            srcset = img.get(attr, '')
+            if srcset:
+                for part in srcset.split(','):
+                    parts = part.strip().split()
+                    if not parts:
+                        continue
+                    url_part = parts[0]
+                    w = int(parts[1].rstrip('w')) if len(parts) > 1 and parts[1].endswith('w') else 0
+                    _add(url_part, w)
+
+    return [url for url, _ in best.values()]
 
 
 def file_hash(path):

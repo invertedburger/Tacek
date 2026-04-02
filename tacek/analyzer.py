@@ -95,7 +95,10 @@ def _groq_image(image_path):
             }],
             response_format={"type": "json_object"},
         )
-        return _parse(resp.choices[0].message.content)
+        result = _parse(resp.choices[0].message.content)
+        days = len(result.get('days', []))
+        log(f"Groq vision extracted {days} day(s) from {os.path.basename(image_path)}")
+        return result
     except Exception as e:
         log(f"ERROR: Groq vision fallback failed for {image_path}: {e}")
         return None
@@ -142,7 +145,7 @@ def _analyze_pdf_as_images(pdf_path):
         with tempfile.TemporaryDirectory() as tmp:
             for i, page in enumerate(doc):
                 img_path = os.path.join(tmp, f"page_{i}.png")
-                page.get_pixmap(dpi=200).save(img_path)
+                page.get_pixmap(dpi=300).save(img_path)
                 data = analyze_image(img_path)
                 if data:
                     merged['days'].extend(data.get('days', []))
