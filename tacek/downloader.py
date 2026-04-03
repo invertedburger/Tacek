@@ -6,6 +6,13 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from tacek.logger import log
 
+try:
+    import cloudscraper
+    _scraper = cloudscraper.create_scraper()
+    log("cloudscraper available — using anti-bot bypass")
+except ImportError:
+    _scraper = None
+
 _HEADERS = {
     'User-Agent': (
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -15,22 +22,18 @@ _HEADERS = {
 }
 
 
+def _get(url, **kwargs):
+    """Use cloudscraper if available, else requests."""
+    if _scraper:
+        return _scraper.get(url, **kwargs)
+    return requests.get(url, headers=_HEADERS, **kwargs)
+
+
 def download_file(url, dest_folder):
     filename = os.path.basename(urlparse(url).path) or f"menu_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     dest_path = os.path.join(dest_folder, filename)
-    parsed = urlparse(url)
-    origin = f"{parsed.scheme}://{parsed.netloc}"
-
-    # Use a session: visit the site root first (anti-hotlink bypass), then download
-    s = requests.Session()
-    s.headers.update(_HEADERS)
-    s.headers['Referer'] = origin + '/'
     log(f"Downloading {url}...")
-    try:
-        s.get(origin, timeout=10)
-    except Exception:
-        pass
-    r = s.get(url, timeout=30)
+    r = _get(url, timeout=30)
     log(f"Downloaded {len(r.content)} bytes, status {r.status_code}")
     if r.status_code != 200:
         log(f"WARNING: Download failed with status {r.status_code}")
@@ -42,11 +45,7 @@ def download_file(url, dest_folder):
 
 def download_webpage(url):
     log(f"Downloading web page: {url}...")
-    s = requests.Session()
-    s.headers.update(_HEADERS)
-    parsed = urlparse(url)
-    s.headers['Referer'] = f"{parsed.scheme}://{parsed.netloc}/"
-    r = s.get(url, timeout=30)
+    r = _get(url, timeout=30)
     r.encoding = r.apparent_encoding
     log(f"Downloaded {len(r.text)} chars from {url}")
     return r.text
@@ -58,7 +57,7 @@ def download_image(url, dest_folder):
         filename = f"menu_img_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
     dest_path = os.path.join(dest_folder, filename)
     log(f"Downloading menu image: {url}...")
-    r = requests.get(url, timeout=30, headers=_HEADERS)
+    r = _get(url, timeout=30)
     log(f"Downloaded image: {len(r.content)} bytes, {r.status_code}, saved as {filename}")
     with open(dest_path, 'wb') as f:
         f.write(r.content)
@@ -164,7 +163,7 @@ def image_content_hash(urls):
     sha = hashlib.sha256()
     for url in sorted(urls):
         try:
-            r = requests.get(url, timeout=15)
+            r = _get(url, timeout=15)
             sha.update(r.content)
         except Exception:
             sha.update(url.encode('utf-8'))

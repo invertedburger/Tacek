@@ -1,6 +1,8 @@
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+_PRAGUE_TZ = timezone(timedelta(hours=2))  # CEST (summer)
 
 
 class RunLogger:
@@ -8,11 +10,11 @@ class RunLogger:
         self.results_dir = results_dir
         self.logs_path = os.path.join(results_dir, 'run_log.json')
         self.logs = []
-        self.start_time = datetime.now().isoformat()
+        self.start_time = datetime.now(_PRAGUE_TZ).isoformat()
 
     def log(self, message):
         """Add a log entry with timestamp."""
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(_PRAGUE_TZ).isoformat()
         self.logs.append({
             'time': timestamp,
             'message': message
@@ -23,7 +25,7 @@ class RunLogger:
         """Save logs to JSON file."""
         data = {
             'start_time': self.start_time,
-            'end_time': datetime.now().isoformat(),
+            'end_time': datetime.now(_PRAGUE_TZ).isoformat(),
             'logs': self.logs
         }
         with open(self.logs_path, 'w', encoding='utf-8') as f:
