@@ -51,11 +51,17 @@ def extract_menu_text(html):
 
 
 def find_menu_images(html, page_url):
-    import re as _re
     soup = BeautifulSoup(html, 'html.parser')
     keywords = ['menu', 'jidel', 'nabidka', 'denni', 'tydenni', 'lunch', 'poledni']
+    images = _collect_images(soup, page_url, keywords)
+    if images:
+        return images
+    # Fallback: find recent WordPress upload images (not logos/headers)
+    return _find_wp_content_images(soup, page_url)
 
-    # base_key → (url, width) — keep only the widest version of each image
+
+def _collect_images(soup, page_url, keywords):
+    import re as _re
     best = {}
 
     def _add(src, width=0):
@@ -63,7 +69,6 @@ def find_menu_images(html, page_url):
         if not src or not any(kw in src.lower() for kw in keywords):
             return
         url = urljoin(page_url, src)
-        # Strip the -WxH WordPress size suffix to get a stable base key
         base = _re.sub(r'-\d+x\d+(\.[^.]+)$', r'\1', os.path.basename(url))
         if base not in best or width > best[base][1]:
             best[base] = (url, width)
@@ -85,6 +90,36 @@ def find_menu_images(html, page_url):
                     _add(url_part, w)
 
     return [url for url, _ in best.values()]
+
+
+def _find_wp_content_images(soup, page_url):
+    """Fallback: find WordPress upload images that are not logos or header banners."""
+    now = datetime.now()
+    results = []
+    skip_classes = {'custom-logo', 'wp-post-image'}
+    for img in soup.find_all('img'):
+        classes = set(img.get('class', []))
+        if classes & skip_classes:
+            continue
+        src = img.get('src') or img.get('data-src') or ''
+        if not src:
+            continue
+        url = urljoin(page_url, src)
+        # Only WordPress uploads from recent months
+        if 'wp-content/uploads/' not in url:
+            continue
+        # Check the upload path contains current or recent year/month
+        for delta in range(3):
+            m = now.month - delta
+            y = now.year
+            if m < 1:
+                m += 12
+                y -= 1
+            if f'/{y}/{m:02d}/' in url:
+                log(f"Fallback image found: {url}")
+                results.append(url)
+                break
+    return results
 
 
 def file_hash(path):

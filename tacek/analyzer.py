@@ -75,15 +75,33 @@ def _groq_text(text, source_name):
         return None
 
 
+def _downscale_image(image_path, max_width=1024):
+    """Downscale image to max_width, return (bytes, mime)."""
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(image_path)
+        if img.width > max_width:
+            ratio = max_width / img.width
+            img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=85)
+        return buf.getvalue(), 'image/jpeg'
+    except ImportError:
+        with open(image_path, 'rb') as f:
+            data = f.read()
+        ext = os.path.splitext(image_path)[1].lower().lstrip('.')
+        mime = f"image/{ext}" if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp') else "image/jpeg"
+        return data, mime
+
+
 def _groq_image(image_path):
     if not _groq_client:
         return None
     try:
         log(f"Trying Groq vision fallback for {image_path}...")
-        with open(image_path, 'rb') as f:
-            b64 = base64.b64encode(f.read()).decode()
-        ext = os.path.splitext(image_path)[1].lower().lstrip('.')
-        mime = f"image/{ext}" if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp') else "image/jpeg"
+        img_bytes, mime = _downscale_image(image_path)
+        b64 = base64.b64encode(img_bytes).decode()
         resp = _groq_client.chat.completions.create(
             model=_GROQ_VISION_MODEL,
             messages=[{
@@ -110,7 +128,8 @@ def _resave_pdf(pdf_path):
         import fitz
         doc = fitz.open(pdf_path)
         out = pdf_path + '.normalized.pdf'
-        doc.save(out, garbage=4, deflate=True, clean=True)
+        doc.save(out, garbage=4, deflate=True)
+        doc.close()
         return out
     except Exception as e:
         log(f"WARNING: PDF re-save failed: {e}")
@@ -145,7 +164,7 @@ def _analyze_pdf_as_images(pdf_path):
         with tempfile.TemporaryDirectory() as tmp:
             for i, page in enumerate(doc):
                 img_path = os.path.join(tmp, f"page_{i}.png")
-                page.get_pixmap(dpi=300).save(img_path)
+                page.get_pixmap(dpi=150).save(img_path)
                 data = analyze_image(img_path)
                 if data:
                     merged['days'].extend(data.get('days', []))
