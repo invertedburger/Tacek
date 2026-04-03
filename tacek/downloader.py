@@ -52,6 +52,11 @@ def extract_menu_text(html):
 
 def find_menu_images(html, page_url):
     soup = BeautifulSoup(html, 'html.parser')
+    all_imgs = soup.find_all('img')
+    log(f"DEBUG: found {len(all_imgs)} img tags on {page_url}")
+    for img in all_imgs:
+        src = img.get('src') or img.get('data-src') or '(none)'
+        log(f"  IMG: {src[:120]}")
     keywords = ['menu', 'jidel', 'nabidka', 'denni', 'tydenni', 'lunch', 'poledni']
     images = _collect_images(soup, page_url, keywords)
     if images:
