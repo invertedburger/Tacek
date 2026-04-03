@@ -34,6 +34,12 @@ def process_all_pdfs(pdf_links):
 
     for url in pdf_links:
         pdf_path = download_file(url, config.DOWNLOAD_DIR)
+        if pdf_path is None:
+            domain = urlparse(url).netloc
+            restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
+            log(f"Skipping {restaurant_name} — download failed.")
+            sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
+            continue
         fhash = file_hash(pdf_path)
         fname = os.path.basename(pdf_path)
         domain = urlparse(url).netloc

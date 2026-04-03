@@ -209,14 +209,15 @@ def _resave_pdf(pdf_path):
             log(f"Simple re-save failed ({type(e1).__name__}: {e1}), trying image-based re-save...")
         # Fallback: create new PDF from rendered page images
         new_doc = fitz.open()
+        page_count = doc.page_count
         for page in doc:
             pix = page.get_pixmap(dpi=200)
             img_page = new_doc.new_page(width=pix.width, height=pix.height)
             img_page.insert_image(img_page.rect, pixmap=pix)
+        doc.close()
         new_doc.save(out)
         new_doc.close()
-        doc.close()
-        log(f"Image-based PDF re-save successful ({doc.page_count} pages)")
+        log(f"Image-based PDF re-save successful ({page_count} pages)")
         return out
     except Exception as e:
         log(f"WARNING: PDF re-save completely failed ({type(e).__name__}: {e})")
