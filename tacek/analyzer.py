@@ -43,7 +43,9 @@ Rules:
 - fodmap_level must be exactly one of: "Low", "Moderate", "High"
 - fitness_level must be exactly one of: "Low", "Medium", "High"
 - Always keep original Czech food names
-- protein_g, carbs_g, fat_g, calories_kcal are estimated integers"""
+- protein_g, carbs_g, fat_g, calories_kcal are estimated integers
+- If the image/text does NOT contain an actual restaurant menu with specific dishes, return {"days": []}
+- Do NOT invent or guess menu items — only extract what is explicitly listed"""
 
 _GROQ_TEXT_MODEL = "llama-3.3-70b-versatile"
 _GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
