@@ -32,5 +32,5 @@
   "download_dir": "menus",
   "results_dir":  "results",
   "min_menu_text_length": 200,
-  "gemini_model": "models/gemini-2.0-flash"
+  "gemini_model": "models/gemini-2.5-flash"
 }

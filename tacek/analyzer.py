@@ -8,18 +8,16 @@ from google.genai import types
 from tacek.config import API_KEY, GEMINI_MODEL, GROQ_API_KEY
 from tacek.logger import log
 
-_client = genai.Client(api_key=API_KEY)
+_gemini = genai.Client(api_key=API_KEY)
+_JSON_CONFIG = types.GenerateContentConfig(response_mime_type="application/json")
 
-_groq_client = None
+_groq = None
 if GROQ_API_KEY:
     try:
         from openai import OpenAI
-        _groq_client = OpenAI(
-            base_url="https://api.groq.com/openai/v1",
-            api_key=GROQ_API_KEY,
-        )
+        _groq = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=GROQ_API_KEY)
     except ImportError:
-        log("WARNING: openai package not installed, Groq fallback disabled.")
+        log("WARNING: openai package not installed, Groq disabled.")
 
 JSON_PROMPT = """Extract all foods from this menu. Return ONLY valid JSON with this exact structure, no markdown, no code fences, no extra text:
 {
@@ -47,9 +45,7 @@ Rules:
 - Always keep original Czech food names
 - protein_g, carbs_g, fat_g, calories_kcal are estimated integers"""
 
-_JSON_CONFIG = types.GenerateContentConfig(response_mime_type="application/json")
-
-_GROQ_TEXT_MODEL  = "llama-3.3-70b-versatile"
+_GROQ_TEXT_MODEL = "llama-3.3-70b-versatile"
 _GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 
@@ -59,24 +55,51 @@ def _parse(text):
     return json.loads(text.strip())
 
 
+# ── Groq (primary) ─────────────────────────────────────────
+
 def _groq_text(text, source_name):
-    if not _groq_client:
+    if not _groq:
         return None
     try:
-        log(f"Trying Groq fallback for {source_name}...")
-        resp = _groq_client.chat.completions.create(
+        log(f"Analyzing {source_name} with Groq...")
+        resp = _groq.chat.completions.create(
             model=_GROQ_TEXT_MODEL,
-            messages=[{"role": "user", "content": JSON_PROMPT + f"\n\nHere is the menu text from {source_name}:\n{text}"}],
+            messages=[{"role": "user", "content": JSON_PROMPT + f"\n\nMenu text from {source_name}:\n{text}"}],
             response_format={"type": "json_object"},
         )
         return _parse(resp.choices[0].message.content)
     except Exception as e:
-        log(f"ERROR: Groq text fallback failed for {source_name}: {e}")
+        log(f"ERROR: Groq text failed for {source_name}: {e}")
+        return None
+
+
+def _groq_image(image_path):
+    if not _groq:
+        return None
+    try:
+        log(f"Analyzing image with Groq: {image_path}")
+        img_bytes, mime = _downscale_image(image_path)
+        b64 = base64.b64encode(img_bytes).decode()
+        resp = _groq.chat.completions.create(
+            model=_GROQ_VISION_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": JSON_PROMPT},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                ],
+            }],
+            response_format={"type": "json_object"},
+        )
+        result = _parse(resp.choices[0].message.content)
+        log(f"Groq vision extracted {len(result.get('days', []))} day(s) from {os.path.basename(image_path)}")
+        return result
+    except Exception as e:
+        log(f"ERROR: Groq vision failed for {image_path}: {e}")
         return None
 
 
 def _downscale_image(image_path, max_width=1024):
-    """Downscale image to max_width, return (bytes, mime)."""
     try:
         from PIL import Image
         import io
@@ -95,35 +118,80 @@ def _downscale_image(image_path, max_width=1024):
         return data, mime
 
 
-def _groq_image(image_path):
-    if not _groq_client:
-        return None
+# ── Gemini (backup) ─────────────────────────────────────────
+
+def _gemini_text(text, source_name):
     try:
-        log(f"Trying Groq vision fallback for {image_path}...")
-        img_bytes, mime = _downscale_image(image_path)
-        b64 = base64.b64encode(img_bytes).decode()
-        resp = _groq_client.chat.completions.create(
-            model=_GROQ_VISION_MODEL,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": JSON_PROMPT},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                ],
-            }],
-            response_format={"type": "json_object"},
+        log(f"Trying Gemini fallback for {source_name}...")
+        resp = _gemini.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=JSON_PROMPT + f"\n\nMenu text from {source_name}:\n{text}",
+            config=_JSON_CONFIG,
         )
-        result = _parse(resp.choices[0].message.content)
-        days = len(result.get('days', []))
-        log(f"Groq vision extracted {days} day(s) from {os.path.basename(image_path)}")
-        return result
+        return _parse(resp.text)
     except Exception as e:
-        log(f"ERROR: Groq vision fallback failed for {image_path}: {e}")
+        log(f"ERROR: Gemini text failed for {source_name}: {e}")
         return None
+
+
+def _gemini_image(image_path):
+    try:
+        log(f"Trying Gemini fallback for image: {image_path}")
+        uploaded = _gemini.files.upload(file=image_path)
+        resp = _gemini.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[JSON_PROMPT, uploaded],
+            config=_JSON_CONFIG,
+        )
+        return _parse(resp.text)
+    except Exception as e:
+        log(f"ERROR: Gemini image failed for {image_path}: {e}")
+        return None
+
+
+# ── Public API ──────────────────────────────────────────────
+
+def analyze_text(text, source_name):
+    """Groq first, Gemini backup."""
+    result = _groq_text(text, source_name)
+    if result and result.get('days'):
+        return result
+    return _gemini_text(text, source_name)
+
+
+def analyze_image(image_path):
+    """Groq vision first, Gemini backup."""
+    result = _groq_image(image_path)
+    if result and result.get('days'):
+        return result
+    return _gemini_image(image_path)
+
+
+def analyze_pdf(pdf_path):
+    """Try Gemini file API first (best for PDFs), then image rendering, then text."""
+    normalized = _resave_pdf(pdf_path)
+    try:
+        uploaded = _gemini.files.upload(file=normalized)
+        resp = _gemini.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[JSON_PROMPT, uploaded],
+            config=_JSON_CONFIG,
+        )
+        return _parse(resp.text)
+    except Exception as e:
+        log(f"WARNING: Gemini PDF API failed for {pdf_path}: {e}")
+
+    # Try image rendering (uses Groq vision → Gemini as fallback per page)
+    log("Falling back to image rendering...")
+    result = _analyze_pdf_as_images(pdf_path)
+    if result:
+        return result
+
+    # Last resort: text extraction
+    return _analyze_pdf_as_text(pdf_path)
 
 
 def _resave_pdf(pdf_path):
-    """Re-save PDF with PyMuPDF to normalize structure (fixes 'no pages' Gemini error)."""
     try:
         import fitz
         doc = fitz.open(pdf_path)
@@ -136,27 +204,11 @@ def _resave_pdf(pdf_path):
         return pdf_path
 
 
-def analyze_pdf(pdf_path):
-    normalized = _resave_pdf(pdf_path)
-    try:
-        uploaded = _client.files.upload(file=normalized)
-        response = _client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=[JSON_PROMPT, uploaded],
-            config=_JSON_CONFIG,
-        )
-        return _parse(response.text)
-    except Exception as e:
-        log(f"WARNING: Gemini file API failed for {pdf_path}: {e}")
-        log("Falling back to image rendering...")
-        return _analyze_pdf_as_images(pdf_path)
-
-
 def _analyze_pdf_as_images(pdf_path):
     try:
         import fitz
     except ImportError:
-        log("ERROR: pymupdf not installed, cannot render PDF as images.")
+        log("ERROR: pymupdf not installed.")
         return None
     try:
         doc = fitz.open(pdf_path)
@@ -171,54 +223,22 @@ def _analyze_pdf_as_images(pdf_path):
         if merged['days']:
             return merged
         log("Image analysis returned no data, trying text extraction...")
-        return _analyze_pdf_as_text(doc, pdf_path)
+        return None
     except Exception as e:
-        log(f"ERROR rendering PDF as images {pdf_path}: {e}")
+        log(f"ERROR rendering PDF images: {e}")
         return None
 
 
-def _analyze_pdf_as_text(doc, pdf_path):
+def _analyze_pdf_as_text(pdf_path):
     try:
+        import fitz
+        doc = fitz.open(pdf_path)
         text = '\n'.join(page.get_text() for page in doc).strip()
         if len(text) < 50:
             log("PDF text extraction yielded too little text.")
             return None
-        log(f"Extracted {len(text)} chars from PDF, sending to Gemini as text...")
+        log(f"Extracted {len(text)} chars from PDF, analyzing as text...")
         return analyze_text(text, os.path.basename(pdf_path))
     except Exception as e:
-        log(f"ERROR extracting text from PDF {pdf_path}: {e}")
+        log(f"ERROR extracting text from PDF: {e}")
         return None
-
-
-def analyze_text(text, source_name):
-    prompt = JSON_PROMPT + f"\n\nHere is the menu text from {source_name}:\n{text}"
-    try:
-        response = _client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=_JSON_CONFIG,
-        )
-        return _parse(response.text)
-    except Exception as e:
-        log(f"ERROR parsing {source_name} with Gemini: {e}")
-        return _groq_text(text, source_name)
-
-
-def analyze_image(image_path):
-    log(f"Analyzing image with Gemini: {image_path}")
-    result = None
-    try:
-        uploaded = _client.files.upload(file=image_path)
-        response = _client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=[JSON_PROMPT, uploaded],
-            config=_JSON_CONFIG,
-        )
-        result = _parse(response.text)
-    except Exception as e:
-        log(f"ERROR analyzing image {image_path} with Gemini: {e}")
-
-    if not result or not result.get('days'):
-        result = _groq_image(image_path)
-
-    return result
