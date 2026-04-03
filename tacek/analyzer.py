@@ -198,11 +198,28 @@ def _resave_pdf(pdf_path):
         import fitz
         doc = fitz.open(pdf_path)
         out = pdf_path + '.normalized.pdf'
-        doc.save(out, garbage=4, deflate=True)
+        log(f"PDF has {doc.page_count} pages, re-saving...")
+        # Try simple re-save first
+        try:
+            doc.save(out)
+            doc.close()
+            log(f"PDF re-saved successfully to {out}")
+            return out
+        except Exception as e1:
+            log(f"Simple re-save failed ({type(e1).__name__}: {e1}), trying image-based re-save...")
+        # Fallback: create new PDF from rendered page images
+        new_doc = fitz.open()
+        for page in doc:
+            pix = page.get_pixmap(dpi=200)
+            img_page = new_doc.new_page(width=pix.width, height=pix.height)
+            img_page.insert_image(img_page.rect, pixmap=pix)
+        new_doc.save(out)
+        new_doc.close()
         doc.close()
+        log(f"Image-based PDF re-save successful ({doc.page_count} pages)")
         return out
     except Exception as e:
-        log(f"WARNING: PDF re-save failed: {e}")
+        log(f"WARNING: PDF re-save completely failed ({type(e).__name__}: {e})")
         return pdf_path
 
 

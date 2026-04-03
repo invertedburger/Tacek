@@ -20,6 +20,7 @@ def download_file(url, dest_folder):
     dest_path = os.path.join(dest_folder, filename)
     log(f"Downloading {url}...")
     r = requests.get(url, timeout=30, headers=_HEADERS)
+    log(f"Downloaded {len(r.content)} bytes, status {r.status_code}")
     with open(dest_path, 'wb') as f:
         f.write(r.content)
     return dest_path
@@ -29,6 +30,7 @@ def download_webpage(url):
     log(f"Downloading web page: {url}...")
     r = requests.get(url, timeout=30, headers=_HEADERS)
     r.encoding = r.apparent_encoding
+    log(f"Downloaded {len(r.text)} chars from {url}")
     return r.text
 
 
@@ -39,6 +41,7 @@ def download_image(url, dest_folder):
     dest_path = os.path.join(dest_folder, filename)
     log(f"Downloading menu image: {url}...")
     r = requests.get(url, timeout=30, headers=_HEADERS)
+    log(f"Downloaded image: {len(r.content)} bytes, {r.status_code}, saved as {filename}")
     with open(dest_path, 'wb') as f:
         f.write(r.content)
     return dest_path
