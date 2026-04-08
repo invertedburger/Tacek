@@ -2,7 +2,8 @@ name: Build & Deploy
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5'   # Mon–Fri 8:00 UTC = 9:00 CET / 10:00 CEST
+    - cron: '37 8 * * 1-5'   # Mon–Fri ~10:37 CEST
+    - cron: '37 9 * * 1-5'   # Mon–Fri ~11:37 CEST
   push:
     branches: [main]
   workflow_dispatch:
