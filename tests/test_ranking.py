@@ -1,6 +1,6 @@
 from datetime import datetime
 import pytest
-from tacek.ranking import get_top_dishes, has_today_menu, _parse_date
+from tacek.ranking import get_top_dishes, has_today_menu, _parse_date, _is_main_dish, _clean_name
 
 
 def _today_label():
@@ -125,3 +125,42 @@ def test_get_top_dishes_no_duplicate_names():
     result = get_top_dishes(data)
     names = [d['name'] for d in result]
     assert len(names) == len(set(names))
+
+
+# ── _is_main_dish ─────────────────────────────────────────────────────────────
+
+def test_is_main_dish_accepts_main_course():
+    assert _is_main_dish('Kuřecí řízek') is True
+
+def test_is_main_dish_rejects_soup():
+    assert _is_main_dish('Polévka zeleninová') is False
+
+def test_is_main_dish_rejects_salad():
+    assert _is_main_dish('Salát Caesar') is False
+
+def test_is_main_dish_rejects_dessert():
+    assert _is_main_dish('Dezert čokoládový') is False
+
+def test_is_main_dish_rejects_starter():
+    assert _is_main_dish('Předkrm z lososa') is False
+
+def test_is_main_dish_case_insensitive():
+    assert _is_main_dish('POLÉVKA') is False
+
+def test_is_main_dish_soup_in_english():
+    assert _is_main_dish('Soup of the day') is False
+
+
+# ── _clean_name ───────────────────────────────────────────────────────────────
+
+def test_clean_name_strips_uppercase_prefix():
+    assert _clean_name('HLAVNÍ: Svíčková') == 'Svíčková'
+
+def test_clean_name_strips_diacritics_prefix():
+    assert _clean_name('POLÉVKA: Gulášová') == 'Gulášová'
+
+def test_clean_name_leaves_normal_names_unchanged():
+    assert _clean_name('Kuřecí řízek') == 'Kuřecí řízek'
+
+def test_clean_name_strips_surrounding_whitespace():
+    assert _clean_name('  Svíčková  ') == 'Svíčková'
