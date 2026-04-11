@@ -1,0 +1,5 @@
+CRON_TZ=Europe/Prague
+
+# Tacek — trigger GitHub Actions Mon–Fri at 10:37 and 11:37 Prague time
+37 10 * * 1-5 /home/opc/tacek/deploy/trigger_github.sh >> /home/opc/tacek/trigger.log 2>&1
+37 11 * * 1-5 /home/opc/tacek/deploy/trigger_github.sh >> /home/opc/tacek/trigger.log 2>&1
