@@ -184,7 +184,12 @@ def generate(sources, timestamp):
     </div>
 
     <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4">Restaurace</h2>
-    <div class="flex flex-col gap-3">
+    <div id="weekend-msg" style="display:none" class="py-12 text-center">
+      <div class="text-5xl mb-4">🛋️</div>
+      <p class="text-gray-500 dark:text-gray-400 text-base font-medium">Víkend &mdash; restaurace mají zavřeno.</p>
+      <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">Menu se obnoví v pondělí v 10:37.</p>
+    </div>
+    <div id="cards-grid" class="flex flex-col gap-3">
       {cards_html}
     </div>
   </main>
@@ -199,7 +204,10 @@ def generate(sources, timestamp):
     (function() {{
       const _today = new Date().toISOString().slice(0, 10);
       const _dow   = new Date().getDay();
-      if (_dow === 0 || _dow === 6 || _today !== _menuDate) {{
+      if (_dow === 0 || _dow === 6) {{
+        document.getElementById('cards-grid').style.display = 'none';
+        document.getElementById('weekend-msg').style.display = 'block';
+      }} else if (_today !== _menuDate) {{
         document.querySelectorAll('.recommend-section').forEach(el => el.style.display = 'none');
       }}
     }})();
