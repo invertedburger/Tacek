@@ -1,10 +1,24 @@
 import os
+import time
 import hashlib
 import requests
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlencode, parse_qsl, urlunparse
 from datetime import datetime
 from bs4 import BeautifulSoup
 from tacek.logger import log
+
+
+def _cache_bust(url):
+    """Append a fresh millisecond `ts` query param to defeat CDN/page caching.
+
+    Some restaurant sites (e.g. IQ Restaurant) serve the menu PDF behind a cache
+    that keys on the query string, so a stale or missing `ts` returns an old file.
+    A fresh timestamp each run always fetches the current menu.
+    """
+    parts = urlparse(url)
+    query = dict(parse_qsl(parts.query))
+    query['ts'] = str(int(time.time() * 1000))
+    return urlunparse(parts._replace(query=urlencode(query)))
 
 try:
     import cloudscraper
@@ -33,7 +47,7 @@ def download_file(url, dest_folder):
     filename = os.path.basename(urlparse(url).path) or f"menu_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     dest_path = os.path.join(dest_folder, filename)
     log(f"Downloading {url}...")
-    r = _get(url, timeout=30)
+    r = _get(_cache_bust(url), timeout=30)
     log(f"Downloaded {len(r.content)} bytes, status {r.status_code}")
     if r.status_code != 200:
         log(f"WARNING: Download failed with status {r.status_code}")
@@ -46,6 +60,9 @@ def download_file(url, dest_folder):
 def download_webpage(url):
     log(f"Downloading web page: {url}...")
     r = _get(url, timeout=30)
+    if r.status_code != 200:
+        log(f"WARNING: Web page download failed with status {r.status_code} for {url}")
+        return None
     r.encoding = r.apparent_encoding
     log(f"Downloaded {len(r.text)} chars from {url}")
     return r.text
@@ -58,6 +75,9 @@ def download_image(url, dest_folder):
     dest_path = os.path.join(dest_folder, filename)
     log(f"Downloading menu image: {url}...")
     r = _get(url, timeout=30)
+    if r.status_code != 200:
+        log(f"WARNING: Image download failed with status {r.status_code} for {url}")
+        return None
     log(f"Downloaded image: {len(r.content)} bytes, {r.status_code}, saved as {filename}")
     with open(dest_path, 'wb') as f:
         f.write(r.content)

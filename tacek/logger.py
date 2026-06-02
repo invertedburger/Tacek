@@ -1,8 +1,9 @@
 import os
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-_PRAGUE_TZ = timezone(timedelta(hours=2))  # CEST (summer)
+_PRAGUE_TZ = ZoneInfo("Europe/Prague")  # DST-aware (CET/CEST)
 
 
 class RunLogger:

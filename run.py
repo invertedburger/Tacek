@@ -19,13 +19,11 @@ if __name__ == '__main__':
     all_sources = pdf_sources + web_sources
     create_index_html(RESULTS_DIR, all_sources)
 
-    logger = get_logger()
-    if logger:
-        log("Scraping complete!")
-        logger.save()
-    create_logs_html(RESULTS_DIR)
+    log("Scraping complete!")
 
-    # Health check: on weekdays, at least one restaurant must have today's menu
+    # Health check: on weekdays, at least one restaurant must have today's menu.
+    # Run this BEFORE saving logs so its WARNING/ERROR messages land in logs.html.
+    exit_code = 0
     dow = datetime.now().weekday()  # 0=Mon … 4=Fri, 5=Sat, 6=Sun
     if dow < 5:
         failed = [s['name'] for s in all_sources if s.get('no_menu')]
@@ -44,4 +42,12 @@ if __name__ == '__main__':
             log(f"WARNING: parsing failed for: {', '.join(failed)}")
         if not ok:
             log("ERROR: No restaurant has today's menu — scraping may be broken!")
-            sys.exit(1)
+            exit_code = 1
+
+    logger = get_logger()
+    if logger:
+        logger.save()
+    create_logs_html(RESULTS_DIR)
+
+    if exit_code:
+        sys.exit(exit_code)

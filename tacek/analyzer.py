@@ -182,6 +182,12 @@ def analyze_pdf(pdf_path):
         return _parse(resp.text)
     except Exception as e:
         log(f"WARNING: Gemini PDF API failed for {pdf_path}: {e}")
+    finally:
+        if normalized != pdf_path and os.path.exists(normalized):
+            try:
+                os.remove(normalized)
+            except OSError:
+                pass
 
     # Try image rendering (uses Groq vision → Gemini as fallback per page)
     log("Falling back to image rendering...")

@@ -19,7 +19,7 @@ from tacek.logger import log
 def split_links(pdf_links, webpage_links):
     pdfs, webpages = [], []
     for url in pdf_links + webpage_links:
-        if url.lower().endswith('.pdf'):
+        if urlparse(url).path.lower().endswith('.pdf'):
             pdfs.append(url)
         elif url.strip():
             webpages.append(url)
@@ -84,8 +84,6 @@ def process_all_webpages(webpage_links):
     sources = []
 
     for url in webpage_links:
-        html_content = download_webpage(url)
-        menu_text    = extract_menu_text(html_content)
         domain       = urlparse(url).netloc
         source_name  = domain.replace('.', '_')
         result_name  = f"{source_name}_results.html"
@@ -94,6 +92,13 @@ def process_all_webpages(webpage_links):
         data_path    = os.path.join(config.RESULTS_DIR, data_name)
         restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
         parser = config.WEBPAGE_PARSERS.get(domain, 'auto')
+
+        html_content = download_webpage(url)
+        if html_content is None:
+            log(f"Skipping {restaurant_name} — download failed.")
+            sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
+            continue
+        menu_text = extract_menu_text(html_content)
 
         if parser == 'image':
             image_urls = find_menu_images(html_content, url)
@@ -186,6 +191,8 @@ def _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_
             for img_url in image_urls:
                 try:
                     img_path = download_image(img_url, config.DOWNLOAD_DIR)
+                    if img_path is None:
+                        continue
                     img_data = analyze_image(img_path)
                     if img_data:
                         merged['days'].extend(img_data.get('days', []))

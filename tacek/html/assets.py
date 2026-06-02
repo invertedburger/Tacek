@@ -49,7 +49,7 @@ FILTER_JS = """
     let fodmapFilter  = localStorage.getItem('fodmapFilter')  || 'all';
     let fitnessFilter = localStorage.getItem('fitnessFilter') || 'all';
     let todayOnly = true;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('sv');
     const _FODMAP_RANK  = { Low: 0, Moderate: 1, High: 2 };
     const _FITNESS_RANK = { High: 0, Medium: 1, Low: 2 };
 

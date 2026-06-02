@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from urllib.parse import quote_plus
 from tacek.html.assets import CHIP_CSS, THEME_JS
@@ -98,10 +99,10 @@ def generate(sources, timestamp):
 
     with_coords = [s for s in sources if s.get('coords')]
     if with_coords:
-        markers_js = ','.join(
-            f'{{"n":"{s["name"]}","u":"{s["result_file"]}","lat":{s["coords"][0]},"lng":{s["coords"][1]}}}'
+        markers_js = json.dumps([
+            {'n': s['name'], 'u': s['result_file'], 'lat': s['coords'][0], 'lng': s['coords'][1]}
             for s in with_coords
-        )
+        ], ensure_ascii=False)
         leaflet_css = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>'
         map_section = """
   <div class="max-w-2xl mx-auto px-4 pb-6">
@@ -126,7 +127,7 @@ def generate(sources, timestamp):
       html: '<div style="background:#22c55e;color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.3)">&#127860;</div>',
       iconSize:[34,34], iconAnchor:[17,17], popupAnchor:[0,-20]
     }});
-    const rs = [{markers_js}];
+    const rs = {markers_js};
     rs.forEach(r => L.marker([r.lat,r.lng],{{icon}}).addTo(map)
       .bindPopup('<b style="font-size:13px">'+r.n+'</b><br><a href="'+r.u+'" style="color:#22c55e;font-size:12px">Zobrazit menu &rarr;</a>'));
     if (rs.length) map.fitBounds(rs.map(r=>[r.lat,r.lng]),{{padding:[50,50]}});
@@ -202,7 +203,7 @@ def generate(sources, timestamp):
     {THEME_JS}
     const _menuDate = "{gen_date}";
     (function() {{
-      const _today = new Date().toISOString().slice(0, 10);
+      const _today = new Date().toLocaleDateString('sv');
       const _dow   = new Date().getDay();
       if (_dow === 0 || _dow === 6) {{
         document.getElementById('cards-grid').style.display = 'none';

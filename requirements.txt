@@ -5,3 +5,4 @@ pymupdf
 openai
 Pillow
 cloudscraper
+tzdata
