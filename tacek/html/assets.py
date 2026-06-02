@@ -190,7 +190,7 @@ LANG_JS = (
       if (window.PAGE_TITLE_KEY && I18N[window.PAGE_TITLE_KEY]) document.title = I18N[window.PAGE_TITLE_KEY][lang];
       if (window._onLangChange) window._onLangChange(lang);
       const lb = document.getElementById('langBtn');
-      if (lb) lb.textContent = lang === 'cs' ? 'EN' : 'CS';
+      if (lb) lb.textContent = lang === 'cs' ? '🇬🇧' : '🇨🇿';
       localStorage.setItem('lang', lang);
     }
 

@@ -59,7 +59,7 @@ STRINGS = {
     "tip.logs":           {"cs": "Logy", "en": "Logs"},
     "tip.settings":       {"cs": "Nastavení", "en": "Settings"},
     "tip.theme":          {"cs": "Přepnout motiv", "en": "Toggle theme"},
-    "tip.lang":           {"cs": "Change language", "en": "Změnit jazyk"},
+    "tip.lang":           {"cs": "Změnit jazyk", "en": "Change language"},
 
     # ── profile page ──────────────────────────────────────────
     "profile.heading":    {"cs": "Dietní preference", "en": "Dietary preferences"},

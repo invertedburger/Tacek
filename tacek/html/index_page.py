@@ -158,7 +158,7 @@ def generate(sources, timestamp):
       <div class="flex items-center gap-1">
         <a href="logs.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm" data-i18n-attr="title:tip.logs" title="Logy">📋</a>
         <a href="profile.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-base" data-i18n-attr="title:tip.settings" title="Nastavení">&#9881;</a>
-        <button id="langBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xs font-semibold" data-i18n-attr="title:tip.lang" title="{i18n.cs('tip.lang')}">EN</button>
+        <button id="langBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-base" data-i18n-attr="title:tip.lang" title="{i18n.cs('tip.lang')}">🇬🇧</button>
         <button id="themeBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-i18n-attr="title:tip.theme" title="Přepnout motiv"></button>
       </div>
     </div>

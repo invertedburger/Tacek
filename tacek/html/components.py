@@ -62,8 +62,8 @@ def head(title, extra_css=''):
 def lang_button():
     return ('<button id="langBtn" class="w-8 h-8 flex items-center justify-center rounded-full '
             'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 '
-            'transition-colors text-xs font-semibold" data-i18n-attr="title:tip.lang" '
-            f'title="{i18n.cs("tip.lang")}">EN</button>')
+            'transition-colors text-base" data-i18n-attr="title:tip.lang" '
+            f'title="{i18n.cs("tip.lang")}">🇬🇧</button>')
 
 
 def header(back_href, back_label, title, right_link_href=None, right_link_text=None):
