@@ -133,16 +133,16 @@ class TestMenuPage:
         assert '35' in self._gen()
 
     def test_fodmap_badge_high(self):
-        assert 'Vysoký FODMAP' in self._gen(_menu_data(fodmap='High'))
+        assert 'data-i18n="fodmap.High">Vysoký</span> FODMAP' in self._gen(_menu_data(fodmap='High'))
 
     def test_fodmap_badge_low(self):
-        assert 'Nízký FODMAP' in self._gen(_menu_data(fodmap='Low'))
+        assert 'data-i18n="fodmap.Low">Nízký</span> FODMAP' in self._gen(_menu_data(fodmap='Low'))
 
     def test_fitness_badge_medium(self):
-        assert 'Dobré fitness' in self._gen(_menu_data(fitness='Medium'))
+        assert 'data-i18n="fitness.Medium">Dobré</span> fitness' in self._gen(_menu_data(fitness='Medium'))
 
     def test_fitness_badge_high(self):
-        assert 'Výborné fitness' in self._gen(_menu_data(fitness='High'))
+        assert 'data-i18n="fitness.High">Výborné</span> fitness' in self._gen(_menu_data(fitness='High'))
 
     def test_problematic_ingredients_shown(self):
         html = self._gen()

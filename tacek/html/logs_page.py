@@ -1,6 +1,7 @@
 from datetime import datetime
-from tacek.html.assets import CHIP_CSS, THEME_JS
-from tacek.html.components import head
+from tacek.html.assets import CHIP_CSS, THEME_JS, LANG_JS
+from tacek.html.components import head, lang_button
+from tacek.html import i18n
 
 
 def generate(log_data):
@@ -15,19 +16,24 @@ def generate(log_data):
       <div>
         <div class="flex items-baseline gap-2">
           <h1 class="text-2xl font-bold text-green-600 logo-glow">Tácek</h1>
-          <span class="text-gray-400 dark:text-gray-500 text-sm font-medium">Logy</span>
+          <span class="text-gray-400 dark:text-gray-500 text-sm font-medium" data-i18n="logs.label">{i18n.cs('logs.label')}</span>
         </div>
       </div>
-      <a href="index.html" class="text-xs text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400">
-        &larr; Zpět
-      </a>
+      <div class="flex items-center gap-2">
+        <a href="index.html" class="text-xs text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400">
+          &larr; <span data-i18n="nav.back">{i18n.cs('nav.back')}</span>
+        </a>
+        {lang_button()}
+      </div>
     </div>
   </header>
   <main class="max-w-4xl mx-auto px-4 py-8">
-    <p class="text-gray-500 dark:text-gray-400">Žádné logy k dispozici</p>
+    <p class="text-gray-500 dark:text-gray-400" data-i18n="logs.none">{i18n.cs('logs.none')}</p>
   </main>
   <script>
     {THEME_JS}
+    const PAGE_TITLE_KEY = "title.logs";
+    {LANG_JS}
   </script>
 </body>
 </html>"""
@@ -81,32 +87,35 @@ def generate(log_data):
       <div>
         <div class="flex items-baseline gap-2">
           <h1 class="text-2xl font-bold text-green-600 logo-glow">Tácek</h1>
-          <span class="text-gray-400 dark:text-gray-500 text-sm font-medium">Logy</span>
+          <span class="text-gray-400 dark:text-gray-500 text-sm font-medium" data-i18n="logs.label">{i18n.cs('logs.label')}</span>
         </div>
       </div>
-      <a href="index.html" class="text-xs text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400">
-        &larr; Zpět
-      </a>
+      <div class="flex items-center gap-2">
+        <a href="index.html" class="text-xs text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400">
+          &larr; <span data-i18n="nav.back">{i18n.cs('nav.back')}</span>
+        </a>
+        {lang_button()}
+      </div>
     </div>
   </header>
 
   <main class="max-w-4xl mx-auto px-4 py-8">
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-6">
-      <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">Běh scraper skriptu</h2>
+      <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4" data-i18n="logs.run">{i18n.cs('logs.run')}</h2>
 
       <div class="grid grid-cols-2 gap-4 mb-6 text-sm">
         <div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Začátek</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" data-i18n="logs.start">{i18n.cs('logs.start')}</p>
           <p class="text-gray-900 dark:text-gray-100 font-mono">{start_dt}</p>
         </div>
         <div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Konec</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" data-i18n="logs.end">{i18n.cs('logs.end')}</p>
           <p class="text-gray-900 dark:text-gray-100 font-mono">{end_dt}</p>
         </div>
       </div>
 
       <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Výstup ({len(logs)} záznamů)</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3"><span data-i18n="logs.output">{i18n.cs('logs.output')}</span> ({len(logs)} <span data-i18n="logs.entries">{i18n.cs('logs.entries')}</span>)</p>
         <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 font-mono text-xs overflow-x-auto">
           {logs_html}
         </div>
@@ -114,12 +123,14 @@ def generate(log_data):
     </div>
   </main>
 
-  <footer class="text-center text-gray-300 dark:text-gray-600 text-xs py-8">
-    Tácek – Logy běhu
+  <footer class="text-center text-gray-300 dark:text-gray-600 text-xs py-8" data-i18n="logs.footer">
+    {i18n.cs('logs.footer')}
   </footer>
 
   <script>
     {THEME_JS}
+    const PAGE_TITLE_KEY = "title.logs";
+    {LANG_JS}
   </script>
 </body>
 </html>"""

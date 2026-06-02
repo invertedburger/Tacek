@@ -1,8 +1,9 @@
 import json
 from datetime import datetime
 from urllib.parse import quote_plus
-from tacek.html.assets import CHIP_CSS, THEME_JS
+from tacek.html.assets import CHIP_CSS, THEME_JS, LANG_JS
 from tacek.html.components import head, fodmap_badge, fitness_badge, FODMAP_CZ, FITNESS_CZ
+from tacek.html import i18n
 
 
 def generate(sources, timestamp):
@@ -23,32 +24,34 @@ def generate(sources, timestamp):
         <div class="px-5 pt-5 pb-4 flex items-start justify-between gap-3">
           <div class="min-w-0">
             <h3 class="font-semibold text-gray-800 dark:text-gray-100 leading-tight">{name}</h3>
-            <p class="text-xs text-red-400 dark:text-red-500 mt-0.5">Menu dnes není k dispozici</p>
+            <p class="text-xs text-red-400 dark:text-red-500 mt-0.5" data-i18n="card.no_menu">{i18n.cs('card.no_menu')}</p>
           </div>
           <a href="{url}" target="_blank"
              class="shrink-0 text-xs text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 mt-0.5">
-            originál &nearr;
+            <span data-i18n="card.original">{i18n.cs('card.original')}</span> &nearr;
           </a>
         </div>
         <div class="px-5 py-4 mt-auto">
-          <div class="block text-center border border-red-200 dark:border-red-900/60 text-red-300 dark:text-red-700 py-2 rounded-lg text-sm font-medium cursor-not-allowed">
-            Menu nedostupné
+          <div class="block text-center border border-red-200 dark:border-red-900/60 text-red-300 dark:text-red-700 py-2 rounded-lg text-sm font-medium cursor-not-allowed" data-i18n="card.unavailable">
+            {i18n.cs('card.unavailable')}
           </div>
         </div>
       </div>"""
             continue
 
         rows = ''
-        for d in top_dishes:
-            dn   = d['name'].capitalize() if d['name'] == d['name'].upper() else d['name']
-            fl   = FODMAP_CZ.get(d['fodmap'], d['fodmap'])
-            fit  = FITNESS_CZ.get(d['fitness'], d['fitness'])
+        for rank, d in enumerate(top_dishes):
+            dn    = d['name'].capitalize() if d['name'] == d['name'].upper() else d['name']
+            fl    = FODMAP_CZ.get(d['fodmap'], d['fodmap'])
+            fit   = FITNESS_CZ.get(d['fitness'], d['fitness'])
+            medal = ['🥇', '🥈', '🥉'][rank] if rank < 3 else ''
             rows += f"""
             <div class="flex items-center gap-2 py-1.5 border-b border-gray-50 dark:border-gray-700/60 last:border-0">
+              <span class="shrink-0 w-5 text-center text-sm leading-none">{medal}</span>
               <a href="https://www.google.com/search?tbm=isch&q={quote_plus(d['name'])}" target="_blank" rel="noopener"
                  class="flex-1 text-sm text-gray-700 dark:text-gray-200 truncate hover:text-green-600 dark:hover:text-green-400 transition-colors">{dn}</a>
-              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fodmap_badge(d['fodmap'])}">{fl}</span>
-              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fitness_badge(d['fitness'])}">{fit}</span>
+              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fodmap_badge(d['fodmap'])}" data-i18n="fodmap.{d['fodmap']}">{fl}</span>
+              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fitness_badge(d['fitness'])}" data-i18n="fitness.{d['fitness']}">{fit}</span>
             </div>"""
 
         col_headers = """
@@ -60,7 +63,7 @@ def generate(sources, timestamp):
 
         dishes_section = f"""
           <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700">
-            <p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5">Doporučujeme dnes</p>
+            <p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5" data-i18n="card.recommend">{i18n.cs('card.recommend')}</p>
             {col_headers}
             {rows}
           </div>""" if rows else ''
@@ -70,13 +73,13 @@ def generate(sources, timestamp):
             button_html = f"""
           <a href="{result_file}"
              class="block text-center border border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/40 py-2 rounded-lg text-sm font-medium transition-colors">
-            Menu z minulého dne &rarr;
+            <span data-i18n="card.stale_menu">{i18n.cs('card.stale_menu')}</span> &rarr;
           </a>"""
         else:
             button_html = f"""
           <a href="{result_file}"
              class="block text-center border border-green-600 text-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-900/20 py-2 rounded-lg text-sm font-medium transition-colors">
-            Zobrazit celé menu &rarr;
+            <span data-i18n="card.view_menu">{i18n.cs('card.view_menu')}</span> &rarr;
           </a>"""
 
         cards_html += f"""
@@ -84,11 +87,11 @@ def generate(sources, timestamp):
         <div class="px-5 pt-5 pb-4 flex items-start justify-between gap-3">
           <div class="min-w-0">
             <h3 class="font-semibold text-gray-800 dark:text-gray-100 leading-tight">{name}</h3>
-            <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Aktualizováno: {last_updated}</p>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5"><span data-i18n="card.updated">{i18n.cs('card.updated')}</span> {last_updated}</p>
           </div>
           <a href="{url}" target="_blank"
              class="shrink-0 text-xs text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 mt-0.5">
-            originál &nearr;
+            <span data-i18n="card.original">{i18n.cs('card.original')}</span> &nearr;
           </a>
         </div>
         {dishes_section}
@@ -150,12 +153,13 @@ def generate(sources, timestamp):
           <h1 class="text-2xl font-bold text-green-600 logo-glow">Tácek</h1>
           <span class="text-gray-400 dark:text-gray-500 text-sm font-medium">Holandsk&aacute;, Brno</span>
         </div>
-        <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Ob&#283;dy v okol&iacute; Holandsk&eacute; &middot; FODMAP &amp; v&yacute;&#382;iva</p>
+        <p class="text-gray-500 dark:text-gray-400 text-sm mt-1" data-i18n="tagline">{i18n.cs('tagline')}</p>
       </div>
       <div class="flex items-center gap-1">
-        <a href="logs.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm" title="Logy">📋</a>
-        <a href="profile.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-base" title="Nastavení">&#9881;</a>
-        <button id="themeBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Přepnout motiv"></button>
+        <a href="logs.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm" data-i18n-attr="title:tip.logs" title="Logy">📋</a>
+        <a href="profile.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-base" data-i18n-attr="title:tip.settings" title="Nastavení">&#9881;</a>
+        <button id="langBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xs font-semibold" data-i18n-attr="title:tip.lang" title="{i18n.cs('tip.lang')}">EN</button>
+        <button id="themeBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-i18n-attr="title:tip.theme" title="Přepnout motiv"></button>
       </div>
     </div>
   </header>
@@ -164,31 +168,31 @@ def generate(sources, timestamp):
     <div class="grid grid-cols-2 gap-3 mb-6">
       <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-4">
         <span class="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">FODMAP</span>
-        <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mt-1">
-          Hodnotí, jak je jídlo vhodné pro citlivý žaludek. Nízký FODMAP = lepší volba.
+        <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mt-1" data-i18n="fodmap.desc">
+          {i18n.cs('fodmap.desc')}
         </p>
         <div class="flex gap-1.5 mt-2.5 flex-wrap">
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400">Nízký = vhodné</span>
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400">Vysoký = riziko</span>
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400" data-i18n="fodmap.good">{i18n.cs('fodmap.good')}</span>
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400" data-i18n="fodmap.bad">{i18n.cs('fodmap.bad')}</span>
         </div>
       </div>
       <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-4">
         <span class="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Fitness</span>
-        <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mt-1">
-          Celková výživová hodnota jídla &ndash; obsah bílkovin, kalorií a složení makronutrientů.
+        <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mt-1" data-i18n="fitness.desc">
+          {i18n.cs('fitness.desc')}
         </p>
         <div class="flex gap-1.5 mt-2.5 flex-wrap">
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400">Výborné = zdravé</span>
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400">Slabé = méně vhodné</span>
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400" data-i18n="fitness.good">{i18n.cs('fitness.good')}</span>
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400" data-i18n="fitness.bad">{i18n.cs('fitness.bad')}</span>
         </div>
       </div>
     </div>
 
-    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4">Restaurace</h2>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4" data-i18n="restaurants">{i18n.cs('restaurants')}</h2>
     <div id="weekend-msg" style="display:none" class="py-12 text-center">
       <div class="text-5xl mb-4">🛋️</div>
-      <p class="text-gray-500 dark:text-gray-400 text-base font-medium">Víkend &mdash; restaurace mají zavřeno.</p>
-      <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">Menu se obnoví v pondělí v 10:37.</p>
+      <p class="text-gray-500 dark:text-gray-400 text-base font-medium" data-i18n="weekend.line1">{i18n.cs('weekend.line1')}</p>
+      <p class="text-gray-400 dark:text-gray-500 text-sm mt-1" data-i18n="weekend.line2">{i18n.cs('weekend.line2')}</p>
     </div>
     <div id="cards-grid" class="flex flex-col gap-3">
       {cards_html}
@@ -196,11 +200,13 @@ def generate(sources, timestamp):
   </main>
 {map_section}
   <footer class="text-center text-gray-300 dark:text-gray-600 text-xs py-8">
-    Aktualizováno: {timestamp} &middot; Tácek &amp; Google Gemini
+    <span data-i18n="card.updated">{i18n.cs('card.updated')}</span> {timestamp} &middot; <span data-i18n="footer.index">{i18n.cs('footer.index')}</span>
   </footer>
 
   <script>
     {THEME_JS}
+    const PAGE_TITLE_KEY = "title.index";
+    {LANG_JS}
     const _menuDate = "{gen_date}";
     (function() {{
       const _today = new Date().toLocaleDateString('sv');

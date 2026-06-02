@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 from tacek.html.assets import DARK_INIT, TAILWIND, CHIP_CSS
+from tacek.html import i18n
 
 FODMAP_CZ  = {'Low': 'Nízký', 'Moderate': 'Střední', 'High': 'Vysoký'}
 FITNESS_CZ = {'Low': 'Slabé', 'Medium': 'Dobré', 'High': 'Výborné'}
@@ -58,22 +59,30 @@ def head(title, extra_css=''):
 </head>"""
 
 
+def lang_button():
+    return ('<button id="langBtn" class="w-8 h-8 flex items-center justify-center rounded-full '
+            'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 '
+            'transition-colors text-xs font-semibold" data-i18n-attr="title:tip.lang" '
+            f'title="{i18n.cs("tip.lang")}">EN</button>')
+
+
 def header(back_href, back_label, title, right_link_href=None, right_link_text=None):
     right = ''
     if right_link_href:
-        right = f'<a href="{right_link_href}" target="_blank" class="text-xs text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 hidden sm:block">{right_link_text}</a>'
+        right = f'<a href="{right_link_href}" target="_blank" class="text-xs text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 hidden sm:block"><span data-i18n="nav.original">{right_link_text}</span> &nearr;</a>'
     return f"""
   <header class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sticky top-0 z-10">
     <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3 min-w-0">
-        <a href="{back_href}" class="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 text-sm font-medium shrink-0">&larr; {back_label}</a>
+        <a href="{back_href}" class="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 text-sm font-medium shrink-0">&larr; <span data-i18n="nav.back">{back_label}</span></a>
         <span class="text-gray-200 dark:text-gray-600">|</span>
         <span class="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{title}</span>
       </div>
       <div class="flex items-center gap-1 shrink-0">
         {right}
-        <a href="profile.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-base" title="Nastavení">&#9881;</a>
-        <button id="themeBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Přepnout motiv"></button>
+        {lang_button()}
+        <a href="profile.html" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-base" data-i18n-attr="title:tip.settings" title="Nastavení">&#9881;</a>
+        <button id="themeBtn" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" data-i18n-attr="title:tip.theme" title="Přepnout motiv"></button>
       </div>
     </div>
   </header>"""

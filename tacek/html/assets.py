@@ -1,3 +1,5 @@
+from tacek.html import i18n
+
 DARK_INIT = "<script>if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark');</script>"
 
 TAILWIND = "<script src=\"https://cdn.tailwindcss.com\"></script>\n  <script>tailwind.config={darkMode:'class'}</script>"
@@ -86,9 +88,14 @@ FILTER_JS = """
 
     function toggleToday() {
       todayOnly = !todayOnly;
-      document.getElementById('todayBtn').textContent = todayOnly ? 'Zobrazit celý týden' : 'Jen dnes';
+      document.getElementById('todayBtn').textContent = todayOnly ? t('week.show') : t('week.today');
       applyFilters();
     }
+
+    window._onLangChange = function() {
+      const b = document.getElementById('todayBtn');
+      if (b) b.textContent = todayOnly ? t('week.show') : t('week.today');
+    };
 
     function _refreshFilterChips() {
       document.querySelectorAll('[data-filter]').forEach(btn => {
@@ -135,3 +142,61 @@ PROFILE_JS = """
     }
 
     _refreshProfileChips();"""
+
+
+# Client-side i18n. Embeds the translation tables, then swaps every [data-i18n]
+# element on load and on toggle — same pattern as the dark-mode toggle.
+LANG_JS = (
+    "\n    const I18N = " + i18n.CLIENT_JSON + ";"
+    "\n    const WEEKDAYS = " + i18n.WEEKDAYS_JSON + ";"
+    + """
+    function _curLang() { return document.documentElement.lang === 'en' ? 'en' : 'cs'; }
+    function t(key) { const e = I18N[key]; return (e && e[_curLang()]) || (e && e.cs) || key; }
+
+    function _detectLang() {
+      const s = localStorage.getItem('lang');
+      if (s === 'cs' || s === 'en') return s;
+      return (navigator.language || '').toLowerCase().indexOf('en') === 0 ? 'en' : 'cs';
+    }
+
+    function _translateWeekdays(lang) {
+      document.querySelectorAll('[data-weekday]').forEach(el => {
+        let orig = el.getAttribute('data-weekday-orig');
+        if (orig === null) { orig = el.textContent; el.setAttribute('data-weekday-orig', orig); }
+        if (lang === 'en') {
+          let out = orig;
+          for (const cz in WEEKDAYS) out = out.replace(new RegExp(cz, 'gi'), WEEKDAYS[cz]);
+          el.textContent = out;
+        } else {
+          el.textContent = orig;
+        }
+      });
+    }
+
+    function applyLang(lang) {
+      document.documentElement.lang = lang;
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const e = I18N[el.dataset.i18n];
+        if (e && e[lang] != null) el.textContent = e[lang];
+      });
+      document.querySelectorAll('[data-i18n-attr]').forEach(el => {
+        el.dataset.i18nAttr.split(',').forEach(pair => {
+          const [attr, key] = pair.split(':').map(s => s.trim());
+          const e = I18N[key];
+          if (e && e[lang] != null) el.setAttribute(attr, e[lang]);
+        });
+      });
+      _translateWeekdays(lang);
+      if (window.PAGE_TITLE_KEY && I18N[window.PAGE_TITLE_KEY]) document.title = I18N[window.PAGE_TITLE_KEY][lang];
+      if (window._onLangChange) window._onLangChange(lang);
+      const lb = document.getElementById('langBtn');
+      if (lb) lb.textContent = lang === 'cs' ? 'EN' : 'CS';
+      localStorage.setItem('lang', lang);
+    }
+
+    (function() {
+      const lb = document.getElementById('langBtn');
+      if (lb) lb.addEventListener('click', () => applyLang(_curLang() === 'cs' ? 'en' : 'cs'));
+      applyLang(_detectLang());
+    })();"""
+)
