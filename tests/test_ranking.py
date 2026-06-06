@@ -1,6 +1,6 @@
 from datetime import datetime
 import pytest
-from tacek.ranking import get_top_dishes, has_today_menu, _parse_date, _is_main_dish, _clean_name
+from tacek.ranking import get_top_dishes, has_today_menu, recommend_date, _parse_date, _is_main_dish, _clean_name
 
 
 def _today_label():
@@ -48,6 +48,23 @@ def test_has_today_menu_no_date_label():
 
 def test_has_today_menu_empty():
     assert has_today_menu({'days': []}) is False
+
+
+# ── recommend_date ────────────────────────────────────────────
+
+def test_recommend_date_dated_today():
+    today = datetime.now().strftime('%Y-%m-%d')
+    data = {'days': [_day(_today_label(), [_dish('Svíčková')])]}
+    assert recommend_date(data) == today
+
+def test_recommend_date_undated_is_empty():
+    # undated menu should always show (empty string, not gated)
+    data = {'days': [_day('Dnešní nabídka', [_dish('Svíčková')])]}
+    assert recommend_date(data) == ''
+
+def test_recommend_date_only_past_is_none():
+    data = {'days': [_day('1.1.2000', [_dish('Svíčková')])]}
+    assert recommend_date(data) is None
 
 
 # ── get_top_dishes ────────────────────────────────────────────

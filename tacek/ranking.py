@@ -55,6 +55,25 @@ def has_today_menu(data):
     return False
 
 
+def recommend_date(data):
+    """Date label (YYYY-MM-DD) the top dishes belong to, for client-side gating.
+
+    Returns the matched date if a dated day equals today, '' if today's menu is
+    undated (so it should always show), or None when there is no today menu.
+    Mirrors the today-pool logic in get_top_dishes so the index gate agrees with
+    the menu page's per-day data-date filtering instead of the build timestamp.
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    has_undated = False
+    for day in data.get('days', []):
+        date_str = _parse_date(day.get('day', ''))
+        if date_str == today:
+            return today
+        if not date_str:
+            has_undated = True
+    return '' if has_undated else None
+
+
 def get_top_dishes(data, n=3):
     today = datetime.now().strftime('%Y-%m-%d')
     scored = []

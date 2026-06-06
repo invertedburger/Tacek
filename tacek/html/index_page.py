@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 from urllib.parse import quote_plus
 from tacek.html.assets import CHIP_CSS, THEME_JS, LANG_JS
 from tacek.html.components import head, fodmap_badge, fitness_badge, FODMAP_CZ, FITNESS_CZ
@@ -7,7 +6,6 @@ from tacek.html import i18n
 
 
 def generate(sources, timestamp):
-    gen_date = datetime.now().strftime('%Y-%m-%d')
     cards_html = ''
     for i, src in enumerate(sources):
         name         = src['name']
@@ -61,8 +59,10 @@ def generate(sources, timestamp):
               <span class="shrink-0 w-[4.5rem] text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Fitness</span>
             </div>""" if rows else ''
 
+        rec_date = src.get('rec_date')
+        rec_date_attr = f' data-rec-date="{rec_date}"' if rec_date else ' data-rec-date=""'
         dishes_section = f"""
-          <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700">
+          <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700"{rec_date_attr}>
             <p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5" data-i18n="card.recommend">{i18n.cs('card.recommend')}</p>
             {col_headers}
             {rows}
@@ -207,15 +207,19 @@ def generate(sources, timestamp):
     {THEME_JS}
     const PAGE_TITLE_KEY = "title.index";
     {LANG_JS}
-    const _menuDate = "{gen_date}";
     (function() {{
       const _today = new Date().toLocaleDateString('sv');
       const _dow   = new Date().getDay();
       if (_dow === 0 || _dow === 6) {{
         document.getElementById('cards-grid').style.display = 'none';
         document.getElementById('weekend-msg').style.display = 'block';
-      }} else if (_today !== _menuDate) {{
-        document.querySelectorAll('.recommend-section').forEach(el => el.style.display = 'none');
+      }} else {{
+        // Hide a card's recommendations only if they belong to a specific past
+        // day (stale deploy). Undated menus (data-rec-date="") always show.
+        document.querySelectorAll('.recommend-section').forEach(el => {{
+          const d = el.getAttribute('data-rec-date');
+          if (d && d !== _today) el.style.display = 'none';
+        }});
       }}
     }})();
   </script>

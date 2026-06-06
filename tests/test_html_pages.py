@@ -102,10 +102,12 @@ class TestIndexPage:
         assert 'Test Restaurant' in html
         assert 'Second Place' in html
 
-    def test_gen_date_in_script(self):
+    def test_recommend_gate_is_date_driven(self):
+        # Recommendations are gated per-card by data-rec-date vs the viewer's
+        # local date, not by the build timestamp.
         html = self._gen()
-        today = datetime.now().strftime('%Y-%m-%d')
-        assert f'"{today}"' in html
+        assert 'data-rec-date=' in html
+        assert "d !== _today" in html
 
 
 # ── menu_page ────────────────────────────────────────────────────────────────
