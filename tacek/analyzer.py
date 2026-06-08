@@ -19,7 +19,7 @@ if GROQ_API_KEY:
     except ImportError:
         log("WARNING: openai package not installed, Groq disabled.")
 
-JSON_PROMPT = """Extract all foods from this menu. Return ONLY valid JSON with this exact structure, no markdown, no code fences, no extra text:
+JSON_PROMPT = """You are a nutrition analyst for a Czech lunch-menu site. Extract every dish from this menu and rate it carefully. Return ONLY valid JSON with this exact structure, no markdown, no code fences, no extra text:
 {
   "days": [
     {
@@ -39,13 +39,31 @@ JSON_PROMPT = """Extract all foods from this menu. Return ONLY valid JSON with t
     }
   ]
 }
-Rules:
-- fodmap_level must be exactly one of: "Low", "Moderate", "High"
-- fitness_level must be exactly one of: "Low", "Medium", "High"
-- Always keep original Czech food names
-- protein_g, carbs_g, fat_g, calories_kcal are estimated integers
-- If the image/text does NOT contain an actual restaurant menu with specific dishes, return {"days": []}
-- Do NOT invent or guess menu items — only extract what is explicitly listed"""
+
+== fodmap_level (gut tolerance — exactly "Low", "Moderate", or "High") ==
+Judge by FODMAP-triggering ingredients, INCLUDING ones hidden in sauces and stocks.
+- HIGH-FODMAP triggers: onion, garlic (extremely common in Czech sauces/guláš/svíčková — assume present unless clearly absent), wheat/gluten (knedlíky, rohlík, breading/"smažený", pasta, roux/"jíška"), legumes (čočka, fazole, cizrna, hrách), large amounts of milk/cream ("smetana", creamy sauces), honey/"med", apple/pear, mango, cauliflower, mushrooms in quantity, cabbage/"zelí" in quantity.
+- "Low"  = no significant triggers: plain grilled/roasted meat or fish, rice, potatoes, carrot, courgette, lettuce, eggs, hard cheese, citrus.
+- "High" = a primary component is a strong trigger (onion/garlic-heavy sauce, breaded/floured dish, knedlíky, legume base, heavy cream sauce).
+- "Moderate" = triggers present but secondary or in small amounts.
+List the actual triggers you found in problematic_ingredients (e.g. ["onion","garlic","gluten","lactose"]); use [] if none.
+
+== fitness_level (overall nutritional quality — exactly "Low", "Medium", or "High") ==
+Reward protein and vegetables; penalise deep-frying, heavy cream, and refined-carb-heavy / low-protein plates.
+- "High"   = lean protein-forward, grilled/baked/steamed/sous-vide, with vegetables or a sensible side (e.g. grilled chicken breast + rice + salad, baked fish, steak + vegetables). Roughly protein >= 30 g and not deep-fried.
+- "Medium" = balanced but heavier — roasted meat with knedlíky/potatoes, moderate sauce, decent protein with more refined carbs or fat.
+- "Low"    = deep-fried/breaded ("smažený", "řízek", hranolky), heavy cream/roux sauces, sweet mains ("buchtičky", "lívance", sladké), or mostly refined carbs with little protein.
+
+== macros (estimated integers for ONE typical restaurant lunch portion) ==
+- Assume a standard Czech lunch portion (main ~120-200 g protein source plus its stated side).
+- Base the estimate on the actual components named; be realistic, not optimistic.
+- Keep them internally consistent: calories_kcal should ≈ protein_g*4 + carbs_g*4 + fat_g*9 (within ~10%).
+
+== general rules ==
+- Always keep the original Czech food name verbatim.
+- Do NOT invent or guess dishes — extract only what is explicitly listed.
+- Soups/"polévka" and the daily soup line still get extracted if listed.
+- If the image/text is NOT an actual menu with specific dishes, return {"days": []}."""
 
 _GROQ_TEXT_MODEL = "llama-3.3-70b-versatile"
 _GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"

@@ -27,6 +27,34 @@ def test_parse_raises_on_invalid_json():
         analyzer._parse('not json at all')
 
 
+# ── JSON_PROMPT rubric guards (don't silently lose the scoring guidance) ───────
+
+def test_prompt_requests_json_for_groq_json_mode():
+    # Groq's response_format=json_object requires the word "json" in the prompt.
+    assert 'json' in analyzer.JSON_PROMPT.lower()
+
+def test_prompt_defines_fodmap_rubric():
+    p = analyzer.JSON_PROMPT
+    assert 'fodmap_level' in p
+    assert all(level in p for level in ('Low', 'Moderate', 'High'))
+    # Names the most common hidden Czech triggers so dishes aren't over-rated.
+    assert 'onion' in p and 'garlic' in p and 'gluten' in p
+
+def test_prompt_defines_fitness_rubric():
+    p = analyzer.JSON_PROMPT
+    assert 'fitness_level' in p
+    assert 'protein' in p.lower()
+    assert 'smažený' in p or 'deep-fr' in p.lower()  # penalises frying
+
+def test_prompt_requires_macro_consistency():
+    # Calories should reconcile with the macro breakdown.
+    p = analyzer.JSON_PROMPT
+    assert 'protein_g*4' in p and 'fat_g*9' in p
+
+def test_prompt_forbids_inventing_dishes():
+    assert 'invent' in analyzer.JSON_PROMPT.lower()
+
+
 # ── analyze_text ─────────────────────────────────────────────────────────────
 
 def _mock_groq_response(data):
