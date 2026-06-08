@@ -8,6 +8,7 @@ from tacek.downloader import (
     file_hash, text_hash, image_content_hash,
     extract_menu_text, find_menu_images,
     download_file, download_webpage, download_image,
+    resolve_pdf_link,
 )
 
 
@@ -187,3 +188,44 @@ def test_download_image_generates_name_for_no_extension(tmp_path):
     with patch('tacek.downloader._get', return_value=_Resp(content=b'data')):
         path = download_image('https://example.com/image', str(tmp_path))
     assert os.path.exists(path)
+
+
+# ── resolve_pdf_link (dynamic PDF URLs, e.g. Eatology / IQ Brno) ───────────────
+
+def test_resolve_pdf_link_passthrough_direct_pdf():
+    # Direct .pdf URLs are returned unchanged without any network call.
+    assert resolve_pdf_link('https://example.com/menu.pdf') == 'https://example.com/menu.pdf'
+
+def test_resolve_pdf_link_passthrough_uppercase_and_query():
+    url = 'https://example.com/MENU.PDF?ts=1'
+    assert resolve_pdf_link(url) == url
+
+def test_resolve_pdf_link_finds_anchor_and_absolutizes():
+    html = '<html><body><a href="/files/lunch.pdf">Stáhnout menu</a></body></html>'
+    with patch('tacek.downloader.download_webpage', return_value=html):
+        result = resolve_pdf_link('https://restaurace.cz/menu')
+    assert result == 'https://restaurace.cz/files/lunch.pdf'
+
+def test_resolve_pdf_link_finds_url_embedded_in_script():
+    # Eatology / Next.js: the PDF link lives in a JSON blob, not an <a> tag.
+    blob = 'https://4urn0.public.blob.vercel-storage.com/menus/brno/cs/monday-123-abc.pdf'
+    html = f'<html><body><script>self.__next={{"pdf":"{blob}"}}</script></body></html>'
+    with patch('tacek.downloader.download_webpage', return_value=html):
+        result = resolve_pdf_link('https://www.iqrestaurant.cz/cs/pobocky/brno')
+    assert result == blob
+
+def test_resolve_pdf_link_prefers_czech_variant():
+    html = ('<a href="https://b.co/menus/en/menu.pdf">EN</a>'
+            '<a href="https://b.co/menus/cs/menu.pdf">CS</a>')
+    with patch('tacek.downloader.download_webpage', return_value=html):
+        result = resolve_pdf_link('https://restaurace.cz/menu')
+    assert '/cs/' in result
+
+def test_resolve_pdf_link_none_when_no_pdf_on_page():
+    html = '<html><body><p>Menu dnes nenabízíme</p></body></html>'
+    with patch('tacek.downloader.download_webpage', return_value=html):
+        assert resolve_pdf_link('https://restaurace.cz/menu') is None
+
+def test_resolve_pdf_link_none_when_page_unreachable():
+    with patch('tacek.downloader.download_webpage', return_value=None):
+        assert resolve_pdf_link('https://restaurace.cz/menu') is None

@@ -107,7 +107,16 @@ class TestIndexPage:
         # local date, not by the build timestamp.
         html = self._gen()
         assert 'data-rec-date=' in html
-        assert "d !== _today" in html
+        assert "d === _today" in html
+        # A dated recommendation that isn't today is hidden client-side.
+        assert "else if (d) el.style.display = 'none'" in html
+
+    def test_preparing_banner_present(self):
+        # Before the daily build runs, the index shows a "menu being prepared"
+        # banner instead of looking dead.
+        html = self._gen()
+        assert 'id="preparing-msg"' in html
+        assert "getElementById('preparing-msg')" in html
 
 
 # ── menu_page ────────────────────────────────────────────────────────────────

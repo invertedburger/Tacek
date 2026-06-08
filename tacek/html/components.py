@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from tacek.html.assets import DARK_INIT, TAILWIND, CHIP_CSS
 from tacek.html import i18n
+from tacek.ranking import _weekday_date
 
 FODMAP_CZ  = {'Low': 'Nízký', 'Moderate': 'Střední', 'High': 'Vysoký'}
 FITNESS_CZ = {'Low': 'Slabé', 'Medium': 'Dobré', 'High': 'Výborné'}
@@ -42,7 +43,7 @@ def parse_date(label):
             return datetime(datetime.now().year, int(m.group(2)), int(m.group(1))).strftime('%Y-%m-%d')
         except ValueError:
             pass
-    return None
+    return _weekday_date(label)
 
 
 def head(title, extra_css=''):

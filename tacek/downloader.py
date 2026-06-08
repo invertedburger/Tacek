@@ -57,6 +57,37 @@ def download_file(url, dest_folder):
     return dest_path
 
 
+def resolve_pdf_link(url):
+    """Resolve a config entry to a direct PDF URL.
+
+    If `url` already points at a `.pdf`, it is returned unchanged. Otherwise the
+    page is fetched and scanned for the current menu PDF link — used by sites
+    (e.g. Eatology / IQ Restaurant Brno) that publish the weekly menu as a PDF
+    on dynamic, hashed storage URLs that change every week and so cannot be
+    hardcoded in config.json. Czech (`/cs/`) variants are preferred.
+    """
+    import re as _re
+    if urlparse(url).path.lower().endswith('.pdf'):
+        return url
+    html = download_webpage(url)
+    if not html:
+        log(f"WARNING: could not load page to resolve PDF link: {url}")
+        return None
+    # Prefer real anchors, then fall back to any .pdf URL embedded in scripts/JSON.
+    soup = BeautifulSoup(html, 'html.parser')
+    anchors = [urljoin(url, a['href']) for a in soup.find_all('a', href=True)
+               if a['href'].lower().split('?')[0].endswith('.pdf')]
+    embedded = _re.findall(r'https?://[^\s"\'<>\\]+?\.pdf', html)
+    candidates = anchors + embedded
+    if not candidates:
+        log(f"WARNING: no PDF link found on {url}")
+        return None
+    czech = [c for c in candidates if '/cs/' in c]
+    resolved = (czech or candidates)[0]
+    log(f"Resolved PDF link on {url} -> {resolved}")
+    return resolved
+
+
 def download_webpage(url):
     log(f"Downloading web page: {url}...")
     r = _get(url, timeout=30)

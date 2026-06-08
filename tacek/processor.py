@@ -5,7 +5,7 @@ from datetime import datetime
 
 from tacek import config
 from tacek.downloader import (
-    download_file, download_webpage, download_image,
+    download_file, download_webpage, download_image, resolve_pdf_link,
     extract_menu_text, find_menu_images, file_hash, text_hash, image_content_hash,
 )
 from tacek.analyzer import analyze_pdf, analyze_text, analyze_image
@@ -17,8 +17,12 @@ from tacek.logger import log
 
 
 def split_links(pdf_links, webpage_links):
-    pdfs, webpages = [], []
-    for url in pdf_links + webpage_links:
+    # pdf_links are explicitly declared PDF sources — even if the entry points at
+    # a page that the PDF link is resolved from (see resolve_pdf_link), not a
+    # direct .pdf. webpage_links are still routed by their .pdf suffix.
+    pdfs = [url for url in pdf_links if url.strip()]
+    webpages = []
+    for url in webpage_links:
         if urlparse(url).path.lower().endswith('.pdf'):
             pdfs.append(url)
         elif url.strip():
@@ -33,41 +37,44 @@ def process_all_pdfs(pdf_links):
     sources = []
 
     for url in pdf_links:
-        pdf_path = download_file(url, config.DOWNLOAD_DIR)
+        # Identity (data files, display name) is keyed on the *config* URL's domain,
+        # so it stays stable even when the resolved PDF lives on dynamic storage.
+        domain = urlparse(url).netloc
+        source_name = domain.replace('.', '_')
+        restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
+
+        pdf_url = resolve_pdf_link(url)
+        pdf_path = download_file(pdf_url, config.DOWNLOAD_DIR) if pdf_url else None
         if pdf_path is None:
-            domain = urlparse(url).netloc
-            restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
             log(f"Skipping {restaurant_name} — download failed.")
             sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
             continue
         fhash = file_hash(pdf_path)
-        fname = os.path.basename(pdf_path)
-        domain = urlparse(url).netloc
-        source_name = domain.replace('.', '_')
         result_name = f"{source_name}_results.html"
         data_name   = f"{source_name}_data.json"
         result_path = os.path.join(config.RESULTS_DIR, result_name)
         data_path   = os.path.join(config.RESULTS_DIR, data_name)
-        restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
 
         data = None
-        if fname in processed and processed[fname] == fhash and os.path.exists(data_path):
+        # Cache key is the stable source_name (not the filename, which can change
+        # weekly on dynamic PDF URLs); freshness is decided by the content hash.
+        if source_name in processed and processed[source_name] == fhash and os.path.exists(data_path):
             cached = _load_json(data_path)
             if has_today_menu(cached):
-                log(f"No change in {fname}, regenerating HTML from cache.")
+                log(f"No change in {source_name}, regenerating HTML from cache.")
                 data = cached
             else:
-                log(f"Cache for {fname} is stale, re-analyzing...")
+                log(f"Cache for {source_name} is stale, re-analyzing...")
 
         if data is None:
             log(f"Analyzing {pdf_path} with Gemini...")
             data = analyze_pdf(pdf_path)
             if data is None:
-                log(f"No menu data for {fname}, marking as unavailable.")
+                log(f"No menu data for {source_name}, marking as unavailable.")
                 sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
                 continue
             _save_json(data, data_path)
-            processed[fname] = fhash
+            processed[source_name] = fhash
             _save_log(processed, log_path)
 
         _write_and_upload(menu_page.generate(data, restaurant_name, url, timestamp), result_path, result_name)

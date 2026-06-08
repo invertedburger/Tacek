@@ -194,6 +194,13 @@ def generate(sources, timestamp):
       <p class="text-gray-500 dark:text-gray-400 text-base font-medium" data-i18n="weekend.line1">{i18n.cs('weekend.line1')}</p>
       <p class="text-gray-400 dark:text-gray-500 text-sm mt-1" data-i18n="weekend.line2">{i18n.cs('weekend.line2')}</p>
     </div>
+    <div id="preparing-msg" style="display:none" class="mb-4 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 flex items-start gap-3">
+      <span class="text-xl leading-none">⏳</span>
+      <div>
+        <p class="text-sm font-medium text-amber-700 dark:text-amber-300" data-i18n="prep.line1">{i18n.cs('prep.line1')}</p>
+        <p class="text-xs text-amber-600/80 dark:text-amber-400/70 mt-0.5" data-i18n="prep.line2">{i18n.cs('prep.line2')}</p>
+      </div>
+    </div>
     <div id="cards-grid" class="flex flex-col gap-3">
       {cards_html}
     </div>
@@ -216,10 +223,18 @@ def generate(sources, timestamp):
       }} else {{
         // Hide a card's recommendations only if they belong to a specific past
         // day (stale deploy). Undated menus (data-rec-date="") always show.
+        let hasToday = false;
         document.querySelectorAll('.recommend-section').forEach(el => {{
           const d = el.getAttribute('data-rec-date');
-          if (d && d !== _today) el.style.display = 'none';
+          if (d === '' || d === _today) hasToday = true;
+          else if (d) el.style.display = 'none';
         }});
+        // Pre-trigger: today's build hasn't run yet, so the page still shows the
+        // previous day. Until ~noon, say so explicitly instead of looking dead.
+        const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+        if (!hasToday && nowMin < 12 * 60) {{
+          document.getElementById('preparing-msg').style.display = 'flex';
+        }}
       }}
     }})();
   </script>

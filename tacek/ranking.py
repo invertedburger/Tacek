@@ -1,5 +1,33 @@
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+
+# Czech/English weekday names → Python weekday index (Mon=0 … Sun=6).
+_WEEKDAYS = {
+    'pondělí': 0, 'pondeli': 0, 'monday': 0,
+    'úterý': 1, 'utery': 1, 'tuesday': 1,
+    'středa': 2, 'streda': 2, 'wednesday': 2,
+    'čtvrtek': 3, 'ctvrtek': 3, 'thursday': 3,
+    'pátek': 4, 'patek': 4, 'friday': 4,
+    'sobota': 5, 'saturday': 5,
+    'neděle': 6, 'nedele': 6, 'sunday': 6,
+}
+
+
+def _weekday_date(label):
+    """Resolve a weekday name (no explicit date) to its date in the current week.
+
+    Menus posted as images (e.g. U Tesaře) label days only by name, with no
+    number. Mapping the name to this week's matching calendar date lets the rest
+    of the pipeline treat the day exactly like a dated one, so a weekly menu
+    shows only today's dishes instead of pooling the whole week as "today".
+    """
+    low = str(label).lower()
+    for name, dow in _WEEKDAYS.items():
+        if name in low:
+            monday = datetime.now() - timedelta(days=datetime.now().weekday())
+            return (monday + timedelta(days=dow)).strftime('%Y-%m-%d')
+    return None
+
 
 _FODMAP_SCORE  = {'Low': 3, 'Moderate': 2, 'High': 1}
 _FITNESS_SCORE = {'High': 3, 'Medium': 2, 'Low': 1}
@@ -38,7 +66,7 @@ def _parse_date(label):
             return datetime(datetime.now().year, int(m.group(2)), int(m.group(1))).strftime('%Y-%m-%d')
         except ValueError:
             pass
-    return None
+    return _weekday_date(label)
 
 
 def _stars_to_level(stars):

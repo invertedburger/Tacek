@@ -3,6 +3,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 
+from tacek import processor, config
 from tacek.processor import split_links, _load_json, _save_json, _write_and_upload
 
 
@@ -43,6 +44,90 @@ def test_split_links_all_pdfs():
     )
     assert len(pdfs) == 2
     assert pages == []
+
+
+def test_split_links_pdf_link_page_url_stays_pdf():
+    # A pdf_links entry pointing at a PAGE (PDF resolved later) is still a PDF
+    # source, even though its path does not end in .pdf.
+    pdfs, pages = split_links(['https://www.iqrestaurant.cz/cs/pobocky/brno'], [])
+    assert pdfs == ['https://www.iqrestaurant.cz/cs/pobocky/brno']
+    assert pages == []
+
+
+def test_split_links_skips_empty_pdf_entries():
+    pdfs, pages = split_links(['', '   ', 'https://a.com/a.pdf'], [])
+    assert pdfs == ['https://a.com/a.pdf']
+
+
+# ── process_all_pdfs: dynamic PDF resolution + stable caching ──────────────────
+
+def _wire_pdf_processor(monkeypatch, tmp_path, resolve, download_content=b'%PDF-1',
+                        filename_seq=None):
+    """Patch process_all_pdfs' collaborators to run without network/AI/FTP."""
+    monkeypatch.setattr(config, 'RESULTS_DIR', str(tmp_path))
+    monkeypatch.setattr(config, 'DOWNLOAD_DIR', str(tmp_path))
+    monkeypatch.setattr(config, 'RESTAURANT_DISPLAY_NAMES', {'www.iqrestaurant.cz': 'Eatology'})
+    monkeypatch.setattr(processor, 'resolve_pdf_link', resolve)
+
+    names = iter(filename_seq) if filename_seq else None
+
+    def fake_download(url, folder):
+        fname = next(names) if names else os.path.basename(url)
+        path = os.path.join(folder, fname)
+        with open(path, 'wb') as f:
+            f.write(download_content)
+        return path
+
+    monkeypatch.setattr(processor, 'download_file', fake_download)
+    monkeypatch.setattr(processor, 'has_today_menu', lambda d: True)
+    monkeypatch.setattr(processor, 'upload', lambda *a, **k: None)
+    monkeypatch.setattr(processor.menu_page, 'generate', lambda *a, **k: '<html/>')
+    analyze = MagicMock(return_value={'days': [{'day': 'Pondělí', 'dishes': []}]})
+    monkeypatch.setattr(processor, 'analyze_pdf', analyze)
+    return analyze
+
+
+def test_process_all_pdfs_resolves_page_to_pdf_and_keeps_identity(tmp_path, monkeypatch):
+    analyze = _wire_pdf_processor(
+        monkeypatch, tmp_path,
+        resolve=lambda u: 'https://blob.example/menus/cs/monday-111-abc.pdf',
+    )
+    sources = processor.process_all_pdfs(['https://www.iqrestaurant.cz/cs/pobocky/brno'])
+
+    assert sources[0]['name'] == 'Eatology'
+    assert sources[0]['result_file'] == 'www_iqrestaurant_cz_results.html'
+    assert os.path.exists(tmp_path / 'www_iqrestaurant_cz_data.json')
+    # Cache key is the stable source_name, not the weekly-changing filename.
+    log = (tmp_path / 'processed_files.log').read_text()
+    assert 'www_iqrestaurant_cz,' in log
+    assert 'monday-111' not in log
+    assert analyze.call_count == 1
+
+
+def test_process_all_pdfs_cache_survives_weekly_filename_change(tmp_path, monkeypatch):
+    # Same PDF content served under a new hashed filename each run must NOT force
+    # re-analysis — otherwise every run burns an AI call (and could miss/empty out
+    # the menu if the AI hiccups).
+    analyze = _wire_pdf_processor(
+        monkeypatch, tmp_path,
+        resolve=lambda u: 'https://blob.example/x.pdf',
+        download_content=b'%PDF-IDENTICAL',
+        filename_seq=['monday-week1.pdf', 'monday-week2.pdf'],
+    )
+    page = ['https://www.iqrestaurant.cz/cs/pobocky/brno']
+    processor.process_all_pdfs(page)   # first run: analyze
+    processor.process_all_pdfs(page)   # second run: new filename, same bytes → cache hit
+    assert analyze.call_count == 1
+
+
+def test_process_all_pdfs_marks_unavailable_when_resolution_fails(tmp_path, monkeypatch):
+    # Restaurant changed their page and the PDF link can't be found → the card is
+    # marked no_menu rather than crashing the whole run.
+    analyze = _wire_pdf_processor(monkeypatch, tmp_path, resolve=lambda u: None)
+    sources = processor.process_all_pdfs(['https://www.iqrestaurant.cz/cs/pobocky/brno'])
+    assert sources[0]['no_menu'] is True
+    assert sources[0]['result_file'] is None
+    analyze.assert_not_called()
 
 
 # ── JSON helpers ──────────────────────────────────────────────────────────────

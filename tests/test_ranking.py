@@ -1,11 +1,32 @@
 from datetime import datetime
 import pytest
-from tacek.ranking import get_top_dishes, has_today_menu, recommend_date, _parse_date, _is_main_dish, _clean_name
+from datetime import timedelta
+from tacek.ranking import (
+    get_top_dishes, has_today_menu, recommend_date,
+    _parse_date, _weekday_date, _is_main_dish, _clean_name,
+)
+
+# Czech weekday names indexed Mon=0 … Sun=6 (matches datetime.weekday()).
+_WEEKDAY_NAMES_CS = ['Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota', 'Neděle']
 
 
 def _today_label():
     now = datetime.now()
     return f"{now.day}.{now.month}.{now.year}"
+
+
+def _date_of_weekday(idx):
+    """Date (YYYY-MM-DD) of weekday `idx` in the current week."""
+    monday = datetime.now() - timedelta(days=datetime.now().weekday())
+    return (monday + timedelta(days=idx)).strftime('%Y-%m-%d')
+
+
+def _today_weekday_name():
+    return _WEEKDAY_NAMES_CS[datetime.now().weekday()]
+
+
+def _other_weekday_name():
+    return _WEEKDAY_NAMES_CS[(datetime.now().weekday() + 1) % 7]
 
 
 def _dish(name, fodmap='Low', fitness='High'):
@@ -25,10 +46,48 @@ def test_parse_date_short():
     assert _parse_date('1.4.') == f'{datetime.now().year}-04-01'
 
 def test_parse_date_no_match():
-    assert _parse_date('Tuesday') is None
+    # A label with neither a number nor a weekday name stays unresolved.
+    assert _parse_date('Specialita dne') is None
+
+def test_parse_date_weekday_name():
+    # Undated weekday names resolve to that weekday's date in the current week.
+    assert _parse_date('Úterý') == _date_of_weekday(1)
+    assert _parse_date('Tuesday') == _date_of_weekday(1)
 
 def test_parse_date_invalid_day():
     assert _parse_date('32.13.2026') is None
+
+
+# ── _weekday_date (robust to format changes) ──────────────────
+
+@pytest.mark.parametrize('idx,label', [
+    (0, 'Pondělí'), (1, 'Úterý'), (2, 'Středa'), (3, 'Čtvrtek'),
+    (4, 'Pátek'), (5, 'Sobota'), (6, 'Neděle'),
+])
+def test_weekday_date_all_czech_days(idx, label):
+    assert _weekday_date(label) == _date_of_weekday(idx)
+
+def test_weekday_date_case_insensitive():
+    assert _weekday_date('PONDĚLÍ') == _date_of_weekday(0)
+
+def test_weekday_date_without_diacritics():
+    # Image OCR / sloppy menus often drop diacritics.
+    assert _weekday_date('streda') == _date_of_weekday(2)
+    assert _weekday_date('ctvrtek') == _date_of_weekday(3)
+
+def test_weekday_date_embedded_in_longer_label():
+    assert _weekday_date('Menu na čtvrtek 🍽') == _date_of_weekday(3)
+
+def test_weekday_date_english_names():
+    assert _weekday_date('friday') == _date_of_weekday(4)
+
+def test_weekday_date_none_when_no_weekday():
+    assert _weekday_date('Polední nabídka') is None
+    assert _weekday_date('') is None
+
+def test_parse_date_numeric_takes_priority_over_weekday():
+    # When both a number and a weekday name are present, the explicit date wins.
+    assert _parse_date('Pondělí 31.3.2026') == '2026-03-31'
 
 
 # ── has_today_menu ────────────────────────────────────────────
@@ -181,3 +240,36 @@ def test_clean_name_leaves_normal_names_unchanged():
 
 def test_clean_name_strips_surrounding_whitespace():
     assert _clean_name('  Svíčková  ') == 'Svíčková'
+
+
+# ── undated / weekday-named menus (U Tesaře-style image menus) ─────────────────
+
+def test_has_today_menu_weekday_name_matches_today():
+    data = {'days': [_day(_today_weekday_name(), [_dish('Dnešní jídlo')])]}
+    assert has_today_menu(data) is True
+
+def test_has_today_menu_weekday_name_other_day_is_false():
+    # A menu listing only a non-today weekday must NOT be treated as today.
+    data = {'days': [_day(_other_weekday_name(), [_dish('Jiný den')])]}
+    assert has_today_menu(data) is False
+
+def test_has_today_menu_truly_undated_still_today():
+    # No number and no weekday name → best-effort "treat as today" fallback.
+    data = {'days': [_day('Polední nabídka', [_dish('Něco')])]}
+    assert has_today_menu(data) is True
+
+def test_get_top_dishes_weekly_menu_returns_only_today():
+    # A full week of weekday-named days (a single image menu) must surface only
+    # today's dishes, not pool the whole week as "today".
+    days = [_day(name, [_dish(f'Dish{idx}')]) for idx, name in enumerate(_WEEKDAY_NAMES_CS)]
+    result = get_top_dishes({'days': days})
+    names = {d['name'] for d in result}
+    assert names == {f'Dish{datetime.now().weekday()}'}
+
+def test_recommend_date_weekday_name_today_returns_today():
+    data = {'days': [_day(_today_weekday_name(), [_dish('X')])]}
+    assert recommend_date(data) == datetime.now().strftime('%Y-%m-%d')
+
+def test_recommend_date_only_other_weekdays_is_none():
+    data = {'days': [_day(_other_weekday_name(), [_dish('X')])]}
+    assert recommend_date(data) is None
