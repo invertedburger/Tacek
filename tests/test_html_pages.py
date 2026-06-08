@@ -167,6 +167,20 @@ class TestMenuPage:
         html = self._gen({'days': []})
         assert 'Test Restaurant' in html
 
+    def test_undated_day_has_empty_data_date(self):
+        # A daily image menu (no date, no weekday) renders with data-date="".
+        html = self._gen({'days': [{'day': '', 'dishes': [
+            {'name': 'Řízek', 'fodmap_level': 'High', 'fitness_level': 'Low',
+             'protein_g': 30, 'carbs_g': 40, 'fat_g': 20, 'calories_kcal': 500}]}]})
+        assert 'data-date=""' in html
+
+    def test_today_filter_keeps_undated_sections_visible(self):
+        # Regression: undated sections must NOT be hidden by the "today only"
+        # filter on weekdays (U Tesaře showed "no menu today" because of this).
+        html = self._gen()
+        assert '!todayOnly || !d || d === today' in html
+        assert 'isWeekend' not in html
+
     def test_back_link_to_index(self):
         assert 'index.html' in self._gen()
 

@@ -68,11 +68,11 @@ FILTER_JS = """
           requestAnimationFrame(() => el.classList.remove('filtering-out'));
         }
       });
-      const todayDow = new Date().getDay();
-      const isWeekend = todayDow === 0 || todayDow === 6;
       document.querySelectorAll('[data-date]').forEach(sec => {
         const d = sec.dataset.date;
-        const show = !todayOnly || (d ? d === today : isWeekend);
+        // Undated sections (daily image menus with no date/weekday, e.g. U Tesaře)
+        // are this-day-only by nature, so always show them under the today filter.
+        const show = !todayOnly || !d || d === today;
         sec.style.display = show ? '' : 'none';
       });
       const noToday = document.getElementById('noToday');
