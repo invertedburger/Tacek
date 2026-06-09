@@ -207,7 +207,9 @@ def generate(sources, timestamp):
   </main>
 {map_section}
   <footer class="text-center text-gray-300 dark:text-gray-600 text-xs py-8">
-    <span data-i18n="card.updated">{i18n.cs('card.updated')}</span> {timestamp} &middot; <span data-i18n="footer.index">{i18n.cs('footer.index')}</span>
+    <span data-i18n="card.updated">{i18n.cs('card.updated')}</span> {timestamp}
+    &middot; <span data-i18n="footer.next">{i18n.cs('footer.next')}</span> <span id="next-update">&mdash;</span>
+    &middot; <span data-i18n="footer.index">{i18n.cs('footer.index')}</span>
   </footer>
 
   <script>
@@ -236,6 +238,40 @@ def generate(sources, timestamp):
           document.getElementById('preparing-msg').style.display = 'flex';
         }}
       }}
+    }})();
+    (function() {{
+      // Next scheduled rebuild: weekdays at 10:37 and 11:37 Europe/Prague.
+      const el = document.getElementById('next-update');
+      if (!el) return;
+      const slots = [[10, 37], [11, 37]];
+      function compute() {{
+        const now = new Date(new Date().toLocaleString('en-US', {{timeZone: 'Europe/Prague'}}));
+        for (let i = 0; i < 8; i++) {{
+          const d = new Date(now);
+          d.setDate(now.getDate() + i);
+          const dow = d.getDay();
+          if (dow === 0 || dow === 6) continue;
+          for (const s of slots) {{
+            const c = new Date(d);
+            c.setHours(s[0], s[1], 0, 0);
+            if (c > now) return c;
+          }}
+        }}
+        return null;
+      }}
+      function render() {{
+        const t = compute();
+        if (!t) {{ el.textContent = '\\u2014'; return; }}
+        const en = document.documentElement.lang === 'en';
+        const names = en ? ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+                         : ['ne','po','út','st','čt','pá','so'];
+        const hh = String(t.getHours()).padStart(2, '0');
+        const mm = String(t.getMinutes()).padStart(2, '0');
+        el.textContent = names[t.getDay()] + ' ' + t.getDate() + '. ' + (t.getMonth() + 1) + '. ' + hh + ':' + mm;
+      }}
+      const prev = window._onLangChange;
+      window._onLangChange = function(l) {{ if (prev) prev(l); render(); }};
+      render();
     }})();
   </script>
 {map_script}

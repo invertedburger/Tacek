@@ -88,6 +88,7 @@ def process_all_webpages(webpage_links):
     log_path = os.path.join(config.RESULTS_DIR, 'processed_webpages.log')
     processed = _load_log(log_path)
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+    today = datetime.now().strftime('%Y-%m-%d')
     sources = []
 
     for url in webpage_links:
@@ -114,8 +115,11 @@ def process_all_webpages(webpage_links):
             cache_key  = text_hash(menu_text)
             image_urls = []
 
+        # Log value is "hash|first_seen_date"; legacy entries are bare "hash".
+        prev_hash, _, prev_date = str(processed.get(url, '')).partition('|')
+
         data = None
-        if url in processed and processed[url] == cache_key and os.path.exists(data_path):
+        if url in processed and prev_hash == cache_key and os.path.exists(data_path):
             cached = _load_json(data_path)
             if has_today_menu(cached):
                 log(f"No change in {url}, regenerating HTML from cache.")
@@ -123,6 +127,7 @@ def process_all_webpages(webpage_links):
             else:
                 log(f"Cache for {url} is stale, re-analyzing...")
 
+        content_changed = prev_hash != cache_key
         if data is None:
             log(f"Analyzing {url} with Gemini...")
             data = _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_name)
@@ -131,12 +136,20 @@ def process_all_webpages(webpage_links):
                 sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
                 continue
             _save_json(data, data_path)
-            processed[url] = cache_key
-            _save_log(processed, log_path)
+            content_changed = True
+
+        # Anchor undated menus to the date their content was first seen, so a
+        # stale/unchanged image can't keep masquerading as "today" (see
+        # ranking.recommend_date). Changed content == today; an unchanged legacy
+        # entry with no recorded date is "unknown" → treated as not-today.
+        seen_date = today if content_changed else (prev_date or 'unknown')
+        processed[url] = f"{cache_key}|{seen_date}"
+        _save_log(processed, log_path)
 
         _write_and_upload(menu_page.generate(data, restaurant_name, url, timestamp), result_path, result_name)
         upload(data_path, data_name)
-        sources.append({'name': restaurant_name, 'url': url, 'result_file': result_name, 'last_updated': timestamp})
+        sources.append({'name': restaurant_name, 'url': url, 'result_file': result_name,
+                        'last_updated': timestamp, 'content_seen_date': seen_date})
 
     return sources
 
@@ -158,6 +171,7 @@ def create_logs_html(results_dir):
 
 def create_index_html(results_dir, sources):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+    today = datetime.now().strftime('%Y-%m-%d')
     sources = geocode(sources)
 
     for src in sources:
@@ -171,6 +185,14 @@ def create_index_html(results_dir, sources):
             src['top_dishes'] = get_top_dishes(data)
             src['stale_menu'] = not has_today_menu(data)
             src['rec_date'] = recommend_date(data)
+            # Freshness guard: an undated menu (recommend_date == '') is only
+            # really "today" if its content was first seen today. Otherwise a
+            # stale, unchanged image would keep showing as the current day.
+            seen = src.get('content_seen_date')
+            if seen is not None and seen != today and src['rec_date'] == '':
+                src['stale_menu'] = True
+                src['top_dishes'] = []
+                src['rec_date'] = None
         except Exception:
             src['top_dishes'] = []
             src['stale_menu'] = False

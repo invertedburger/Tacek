@@ -34,6 +34,7 @@ STRINGS = {
     "card.view_menu":     {"cs": "Zobrazit celé menu", "en": "View full menu"},
     "card.stale_menu":    {"cs": "Menu z minulého dne", "en": "Previous day's menu"},
     "footer.index":       {"cs": "Tácek & Google Gemini", "en": "Tácek & Google Gemini"},
+    "footer.next":        {"cs": "Příští aktualizace:", "en": "Next update:"},
 
     # ── menu page ─────────────────────────────────────────────
     "menu.heading":       {"cs": "Analyzované menu", "en": "Analyzed menu"},
