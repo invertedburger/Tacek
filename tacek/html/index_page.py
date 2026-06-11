@@ -208,7 +208,7 @@ def generate(sources, timestamp):
 {map_section}
   <footer class="text-center text-gray-300 dark:text-gray-600 text-xs py-8 space-y-1">
     <div><span data-i18n="card.updated">{i18n.cs('card.updated')}</span> {timestamp} &middot; <span data-i18n="footer.index">{i18n.cs('footer.index')}</span></div>
-    <div>Chuť na indické? <a href="https://indiani.ivomartisek.cz" class="font-medium text-green-600 dark:text-green-400 hover:underline">Indiáni v Brně 🍛</a></div>
+    <div class="text-sm pt-1">Chuť na indické? <a href="https://indiani.ivomartisek.cz" class="font-semibold text-green-600 dark:text-green-400 hover:underline">Indiáni v Brně 🍛</a></div>
   </footer>
 
   <script>
