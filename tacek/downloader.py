@@ -206,11 +206,19 @@ def text_hash(text):
 
 
 def image_content_hash(urls):
+    """SHA-256 over all image bytes, or None if any fetch fails.
+
+    Returning None instead of a made-up hash keeps a transient network error
+    from registering as "content changed" (which would fake menu freshness)
+    and from flip-flopping the cache on the next successful run.
+    """
     sha = hashlib.sha256()
     for url in sorted(urls):
         try:
             r = _get(url, timeout=15)
-            sha.update(r.content)
         except Exception:
-            sha.update(url.encode('utf-8'))
+            return None
+        if r.status_code != 200:
+            return None
+        sha.update(r.content)
     return sha.hexdigest()

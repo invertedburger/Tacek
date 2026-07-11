@@ -1,3 +1,4 @@
+from html import escape
 from urllib.parse import quote_plus
 from tacek.html.assets import CHIP_CSS, THEME_JS, FILTER_JS, LANG_JS
 from tacek.html.components import (
@@ -23,13 +24,13 @@ def generate(data, restaurant_name, source_url, last_updated):
             calories      = dish.get('calories_kcal', '?')
             fodmap_label  = FODMAP_CZ.get(fodmap, fodmap)
             fitness_label = FITNESS_CZ.get(fitness, fitness)
-            ing_html = f'<p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">{ingredients}</p>' if ingredients else ''
+            ing_html = f'<p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">{escape(ingredients)}</p>' if ingredients else ''
             dishes_html += f"""
           <a href="https://www.google.com/search?tbm=isch&q={quote_plus(name)}" target="_blank" rel="noopener"
              class="anim-card card-hover block bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-3" style="animation-delay:{i * 60}ms" data-fodmap="{fodmap}" data-fitness="{fitness}">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
-                <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm leading-snug">{name}</p>
+                <p class="font-semibold text-gray-800 dark:text-gray-100 text-sm leading-snug">{escape(name)}</p>
                 <div class="flex flex-wrap items-center gap-2 mt-2">
                   <span class="px-2 py-0.5 rounded-full text-xs font-medium {fodmap_badge(fodmap)}"><span data-i18n="fodmap.{fodmap}">{fodmap_label}</span> FODMAP</span>
                   <span class="px-2 py-0.5 rounded-full text-xs font-medium {fitness_badge(fitness)}"><span data-i18n="fitness.{fitness}">{fitness_label}</span> fitness</span>
@@ -48,7 +49,7 @@ def generate(data, restaurant_name, source_url, last_updated):
         date_attr = f'data-date="{date_str}"' if date_str else 'data-date=""'
         days_html += f"""
         <div class="mb-8" {date_attr}>
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3 px-1" data-weekday>{day_label}</h3>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3 px-1" data-weekday>{escape(day_label)}</h3>
           {dishes_html}
         </div>"""
 

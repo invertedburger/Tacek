@@ -1,6 +1,7 @@
 import os
 import ftplib
 from tacek.config import FTP_HOST, FTP_USER, FTP_PASS, FTP_DIR
+from tacek.logger import log
 
 
 def upload(local_path, remote_filename=None):
@@ -13,4 +14,4 @@ def upload(local_path, remote_filename=None):
             ftp.cwd(FTP_DIR)
         with open(local_path, 'rb') as f:
             ftp.storbinary(f'STOR {remote_filename}', f)
-    print(f"Uploaded to FTP: {remote_filename}")
+    log(f"Uploaded to FTP: {remote_filename}")

@@ -1,4 +1,5 @@
 import json
+from html import escape
 from urllib.parse import quote_plus
 from tacek.html.assets import CHIP_CSS, THEME_JS, LANG_JS
 from tacek.html.components import head, fodmap_badge, fitness_badge, FODMAP_CZ, FITNESS_CZ
@@ -47,7 +48,7 @@ def generate(sources, timestamp):
             <div class="flex items-center gap-2 py-1.5 border-b border-gray-50 dark:border-gray-700/60 last:border-0">
               <span class="shrink-0 w-5 text-center text-sm leading-none">{medal}</span>
               <a href="https://www.google.com/search?tbm=isch&q={quote_plus(d['name'])}" target="_blank" rel="noopener"
-                 class="flex-1 text-sm text-gray-700 dark:text-gray-200 truncate hover:text-green-600 dark:hover:text-green-400 transition-colors">{dn}</a>
+                 class="flex-1 text-sm text-gray-700 dark:text-gray-200 truncate hover:text-green-600 dark:hover:text-green-400 transition-colors">{escape(dn)}</a>
               <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fodmap_badge(d['fodmap'])}" data-i18n="fodmap.{d['fodmap']}">{fl}</span>
               <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fitness_badge(d['fitness'])}" data-i18n="fitness.{d['fitness']}">{fit}</span>
             </div>"""
@@ -59,10 +60,12 @@ def generate(sources, timestamp):
               <span class="shrink-0 w-[4.5rem] text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Fitness</span>
             </div>""" if rows else ''
 
+        # On the card root (not the recommend section) so the pre-trigger check
+        # still sees today's menus when a card has no recommendable dishes.
         rec_date = src.get('rec_date')
-        rec_date_attr = f' data-rec-date="{rec_date}"' if rec_date else ' data-rec-date=""'
+        rec_date_attr = f' data-rec-date="{rec_date}"' if rec_date is not None else ''
         dishes_section = f"""
-          <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700"{rec_date_attr}>
+          <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700">
             <p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5" data-i18n="card.recommend">{i18n.cs('card.recommend')}</p>
             {col_headers}
             {rows}
@@ -83,7 +86,7 @@ def generate(sources, timestamp):
           </a>"""
 
         cards_html += f"""
-      <div class="anim-card card-hover bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col" style="animation-delay:{i * 80}ms">
+      <div class="anim-card card-hover bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col" style="animation-delay:{i * 80}ms"{rec_date_attr}>
         <div class="px-5 pt-5 pb-4 flex items-start justify-between gap-3">
           <div class="min-w-0">
             <h3 class="font-semibold text-gray-800 dark:text-gray-100 leading-tight">{name}</h3>
@@ -223,13 +226,18 @@ def generate(sources, timestamp):
         document.getElementById('cards-grid').style.display = 'none';
         document.getElementById('weekend-msg').style.display = 'block';
       }} else {{
-        // Hide a card's recommendations only if they belong to a specific past
-        // day (stale deploy). Undated menus (data-rec-date="") always show.
+        // Cards carry data-rec-date when they have a today menu ("" = undated,
+        // always current). Hide a card's recommendations only if they belong to
+        // a specific past day (stale deploy).
         let hasToday = false;
-        document.querySelectorAll('.recommend-section').forEach(el => {{
-          const d = el.getAttribute('data-rec-date');
-          if (d === '' || d === _today) hasToday = true;
-          else if (d) el.style.display = 'none';
+        document.querySelectorAll('#cards-grid [data-rec-date]').forEach(card => {{
+          const d = card.getAttribute('data-rec-date');
+          if (d === '' || d === _today) {{
+            hasToday = true;
+          }} else {{
+            const rs = card.querySelector('.recommend-section');
+            if (rs) rs.style.display = 'none';
+          }}
         }});
         // Pre-trigger: today's build hasn't run yet, so the page still shows the
         // previous day. Until ~noon, say so explicitly instead of looking dead.
