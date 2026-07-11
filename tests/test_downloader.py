@@ -61,10 +61,16 @@ def test_image_content_hash_uses_content():
     assert h1 != h2
 
 
-def test_image_content_hash_falls_back_on_network_error():
+def test_image_content_hash_returns_none_on_network_error():
+    # A failed fetch must not produce a made-up hash — that would register as
+    # "content changed" and fake menu freshness.
     with patch('tacek.downloader._get', side_effect=Exception('timeout')):
-        result = image_content_hash(['https://example.com/a.jpg'])
-    assert len(result) == 64  # still returns a sha256 hex
+        assert image_content_hash(['https://example.com/a.jpg']) is None
+
+
+def test_image_content_hash_returns_none_on_http_error():
+    with patch('tacek.downloader._get', return_value=_Resp(content=b'nope', status_code=503)):
+        assert image_content_hash(['https://example.com/a.jpg']) is None
 
 
 def test_image_content_hash_is_order_independent():

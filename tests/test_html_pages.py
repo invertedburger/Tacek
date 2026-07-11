@@ -20,6 +20,7 @@ def _src(no_menu=False, stale=False, coords=None):
         'stale_menu': stale,
         'last_updated': '2026-04-11 14:00',
         'top_dishes': [{'name': 'Svíčková', 'fodmap': 'High', 'fitness': 'Medium'}],
+        'rec_date': None if stale else '',
     }
 
 
@@ -109,7 +110,8 @@ class TestIndexPage:
         assert 'data-rec-date=' in html
         assert "d === _today" in html
         # A dated recommendation that isn't today is hidden client-side.
-        assert "else if (d) el.style.display = 'none'" in html
+        assert "rs.style.display = 'none'" in html
+        assert "#cards-grid [data-rec-date]" in html
 
     def test_preparing_banner_present(self):
         # Before the daily build runs, the index shows a "menu being prepared"

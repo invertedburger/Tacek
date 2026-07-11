@@ -4,6 +4,7 @@ import time
 import requests
 from urllib.parse import urlparse
 from tacek.config import RESTAURANT_NAMES, RESTAURANT_COORDS_OVERRIDE, RESULTS_DIR
+from tacek.logger import log
 
 
 def geocode(sources):
@@ -28,7 +29,7 @@ def geocode(sources):
             continue
 
         query = RESTAURANT_NAMES.get(domain, f'{domain} Brno Czech Republic')
-        print(f"Geocoding: {query}...")
+        log(f"Geocoding: {query}...")
         try:
             r = requests.get(
                 'https://nominatim.openstreetmap.org/search',
@@ -42,11 +43,11 @@ def geocode(sources):
                 cache[domain] = coords
                 src['coords'] = coords
                 changed = True
-                print(f"  -> {coords}")
+                log(f"  -> {coords}")
             else:
-                print(f"  -> not found")
+                log(f"  -> not found")
         except Exception as e:
-            print(f"  -> error: {e}")
+            log(f"  -> error: {e}")
         time.sleep(1)
 
     if changed:

@@ -59,6 +59,11 @@ Reward protein and vegetables; penalise deep-frying, heavy cream, and refined-ca
 - Base the estimate on the actual components named; be realistic, not optimistic.
 - Keep them internally consistent: calories_kcal should ≈ protein_g*4 + carbs_g*4 + fat_g*9 (within ~10%).
 
+== day labels (critical for showing the correct day) ==
+- Create one entry in days[] per distinct day the menu shows. A weekly menu yields one entry per weekday; a single-day menu yields one entry.
+- Set "day" to that day's date and/or weekday name EXACTLY as printed on the menu, e.g. "Pondělí 9.6.2026", "Úterý 10.6.", or just "Středa". Copy whatever date or weekday is shown verbatim.
+- NEVER leave "day" empty or blank when any date or weekday name is visible anywhere on the menu (header, corner, per-day heading) — always copy it. Use an empty label ONLY when the menu shows no date and no weekday at all.
+
 == general rules ==
 - Always keep the original Czech food name verbatim.
 - Do NOT invent or guess dishes — extract only what is explicitly listed.
