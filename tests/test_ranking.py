@@ -2,7 +2,7 @@ from datetime import datetime
 import pytest
 from datetime import timedelta
 from tacek.ranking import (
-    get_top_dishes, has_today_menu, recommend_date,
+    get_top_dishes, get_top_dishes_by_day, has_today_menu, menu_dates, recommend_date,
     _parse_date, _weekday_date, _is_main_dish, _clean_name,
 )
 
@@ -273,3 +273,85 @@ def test_recommend_date_weekday_name_today_returns_today():
 def test_recommend_date_only_other_weekdays_is_none():
     data = {'days': [_day(_other_weekday_name(), [_dish('X')])]}
     assert recommend_date(data) is None
+
+
+# ── get_top_dishes_by_day (weekly menus, pre-trigger) ─────────
+
+def test_by_day_keys_every_dated_day():
+    data = {'days': [
+        _day('1.1.2000', [_dish('Millennium')]),
+        _day('2.1.2000', [_dish('Den po')]),
+    ]}
+    result = get_top_dishes_by_day(data)
+    assert set(result) == {'2000-01-01', '2000-01-02'}
+    assert result['2000-01-01'][0]['name'] == 'Millennium'
+    assert result['2000-01-02'][0]['name'] == 'Den po'
+
+
+def test_by_day_keeps_future_days_a_build_day_lookup_would_drop():
+    # The whole point: Tuesday's dishes survive Monday's build, so Tuesday
+    # morning can show them before Tuesday's trigger fires.
+    days = [_day(name, [_dish(f'Dish{idx}')]) for idx, name in enumerate(_WEEKDAY_NAMES_CS)]
+    result = get_top_dishes_by_day({'days': days})
+    assert len(result) == 7
+    for idx in range(7):
+        assert result[_date_of_weekday(idx)][0]['name'] == f'Dish{idx}'
+
+
+def test_by_day_undated_uses_empty_key():
+    data = {'days': [_day('Polední nabídka', [_dish('Něco')])]}
+    assert list(get_top_dishes_by_day(data)) == ['']
+
+
+def test_by_day_pools_days_sharing_a_date():
+    # Merged image menus can emit the same undated day more than once.
+    data = {'days': [
+        _day('Nabídka', [_dish('Jedna', fodmap='Moderate', fitness='Medium')]),
+        _day('Nabídka', [_dish('Dva', fodmap='Low', fitness='High')]),
+    ]}
+    result = get_top_dishes_by_day(data)
+    assert [d['name'] for d in result['']] == ['Dva', 'Jedna']
+
+
+def test_by_day_skips_days_with_nothing_recommendable():
+    data = {'days': [
+        _day('1.1.2000', [_dish('Polévka česneková')]),
+        _day('2.1.2000', [_dish('Řízek')]),
+    ]}
+    assert list(get_top_dishes_by_day(data)) == ['2000-01-02']
+
+
+def test_get_top_dishes_still_picks_today_from_the_map():
+    days = [_day(name, [_dish(f'Dish{idx}')]) for idx, name in enumerate(_WEEKDAY_NAMES_CS)]
+    result = get_top_dishes({'days': days})
+    assert [d['name'] for d in result] == [f'Dish{datetime.now().weekday()}']
+
+
+def test_get_top_dishes_prefers_dated_today_over_undated():
+    data = {'days': [
+        _day('Polední nabídka', [_dish('Bez data')]),
+        _day(_today_label(), [_dish('S datem')]),
+    ]}
+    assert [d['name'] for d in get_top_dishes(data)] == ['S datem']
+
+
+# ── menu_dates ────────────────────────────────────────────────
+
+def test_menu_dates_collects_all_days():
+    data = {'days': [_day('1.1.2000', [_dish('A')]), _day('2.1.2000', [_dish('B')])]}
+    assert menu_dates(data) == {'2000-01-01', '2000-01-02'}
+
+
+def test_menu_dates_marks_undated_as_empty_string():
+    assert menu_dates({'days': [_day('Polední nabídka', [_dish('A')])]}) == {''}
+
+
+def test_menu_dates_includes_days_with_no_recommendable_dish():
+    # Wider than get_top_dishes_by_day on purpose: a soup-only day still means
+    # the build for that day has landed.
+    data = {'days': [_day('1.1.2000', [_dish('Polévka česneková')])]}
+    assert menu_dates(data) == {'2000-01-01'}
+
+
+def test_menu_dates_empty_menu():
+    assert menu_dates({'days': []}) == set()

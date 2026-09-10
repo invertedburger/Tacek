@@ -104,14 +104,59 @@ class TestIndexPage:
         assert 'Second Place' in html
 
     def test_recommend_gate_is_date_driven(self):
-        # Recommendations are gated per-card by data-rec-date vs the viewer's
-        # local date, not by the build timestamp.
+        # Recommendations are gated per day-block by data-rec-date vs the
+        # viewer's local date, not by the build timestamp.
         html = self._gen()
-        assert 'data-rec-date=' in html
-        assert "d === _today" in html
-        # A dated recommendation that isn't today is hidden client-side.
-        assert "rs.style.display = 'none'" in html
-        assert "#cards-grid [data-rec-date]" in html
+        assert 'class="rec-day" data-rec-date=' in html
+        assert "rd === _today" in html
+        assert "#cards-grid .recommend-section" in html
+        assert "#cards-grid [data-menu-dates]" in html
+
+    def test_weekly_menu_carries_every_day(self):
+        # A weekly menu is analyzed in one run, so each day gets its own block —
+        # letting a later morning show the right day before that day's build.
+        src = _src()
+        src['top_by_day'] = {
+            '2026-04-11': [{'name': 'Sobotní', 'fodmap': 'Low', 'fitness': 'High'}],
+            '2026-04-12': [{'name': 'Nedělní', 'fodmap': 'Low', 'fitness': 'High'}],
+        }
+        src['menu_dates'] = ['2026-04-11', '2026-04-12']
+        html = self._gen([src])
+        assert 'data-rec-date="2026-04-11"' in html
+        assert 'data-rec-date="2026-04-12"' in html
+        assert 'Sobotní' in html and 'Nedělní' in html
+        assert 'data-menu-dates="2026-04-11 2026-04-12"' in html
+
+    def test_only_build_day_block_is_visible_server_side(self):
+        # The pre-JS view must show exactly the build day; the rest ship hidden
+        # for the client to reveal once it knows the viewer's date.
+        src = _src()
+        src['top_by_day'] = {
+            '2026-04-11': [{'name': 'Dnesni', 'fodmap': 'Low', 'fitness': 'High'}],
+            '2026-04-12': [{'name': 'Zitrejsi', 'fodmap': 'Low', 'fitness': 'High'}],
+        }
+        src['menu_dates'] = ['2026-04-11', '2026-04-12']
+        html = self._gen([src])
+        assert '<div class="rec-day" data-rec-date="2026-04-11">' in html
+        assert '<div class="rec-day" data-rec-date="2026-04-12" hidden>' in html
+
+    def test_undated_day_counts_as_the_build_day(self):
+        # An undated menu is whatever was current when the build ran, so it must
+        # stop counting as "today" once the calendar moves on — otherwise the
+        # "menu is being prepared" banner could never fire.
+        assert 'data-menu-dates="2026-04-11"' in self._gen()
+
+    def test_undated_block_still_renders_undated(self):
+        # The block itself stays undated and visible: the prep banner explains
+        # that it is the previous day's menu rather than hiding it.
+        assert '<div class="rec-day" data-rec-date="">' in self._gen()
+
+    def test_recommend_section_hidden_when_no_day_matches_build(self):
+        src = _src()
+        src['top_by_day'] = {'2026-04-12': [{'name': 'Zitra', 'fodmap': 'Low', 'fitness': 'High'}]}
+        src['menu_dates'] = ['2026-04-12']
+        html = self._gen([src])
+        assert 'class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700" hidden>' in html
 
     def test_preparing_banner_present(self):
         # Before the daily build runs, the index shows a "menu being prepared"

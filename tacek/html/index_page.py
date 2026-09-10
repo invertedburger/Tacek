@@ -6,7 +6,23 @@ from tacek.html.components import head, fodmap_badge, fitness_badge, FODMAP_CZ, 
 from tacek.html import i18n
 
 
-def generate(sources, timestamp):
+def _dish_row(rank, d):
+    dn    = d['name'].capitalize() if d['name'] == d['name'].upper() else d['name']
+    fl    = FODMAP_CZ.get(d['fodmap'], d['fodmap'])
+    fit   = FITNESS_CZ.get(d['fitness'], d['fitness'])
+    medal = ['🥇', '🥈', '🥉'][rank] if rank < 3 else ''
+    return f"""
+              <div class="flex items-center gap-2 py-1.5 border-b border-gray-50 dark:border-gray-700/60 last:border-0">
+                <span class="shrink-0 w-5 text-center text-sm leading-none">{medal}</span>
+                <a href="https://www.google.com/search?tbm=isch&q={quote_plus(d['name'])}" target="_blank" rel="noopener"
+                   class="flex-1 text-sm text-gray-700 dark:text-gray-200 truncate hover:text-green-600 dark:hover:text-green-400 transition-colors">{escape(dn)}</a>
+                <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fodmap_badge(d['fodmap'])}" data-i18n="fodmap.{d['fodmap']}">{fl}</span>
+                <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fitness_badge(d['fitness'])}" data-i18n="fitness.{d['fitness']}">{fit}</span>
+              </div>"""
+
+
+def generate(sources, timestamp, today=None):
+    today = today or timestamp[:10]
     cards_html = ''
     for i, src in enumerate(sources):
         name         = src['name']
@@ -38,38 +54,46 @@ def generate(sources, timestamp):
       </div>"""
             continue
 
-        rows = ''
-        for rank, d in enumerate(top_dishes):
-            dn    = d['name'].capitalize() if d['name'] == d['name'].upper() else d['name']
-            fl    = FODMAP_CZ.get(d['fodmap'], d['fodmap'])
-            fit   = FITNESS_CZ.get(d['fitness'], d['fitness'])
-            medal = ['🥇', '🥈', '🥉'][rank] if rank < 3 else ''
-            rows += f"""
-            <div class="flex items-center gap-2 py-1.5 border-b border-gray-50 dark:border-gray-700/60 last:border-0">
-              <span class="shrink-0 w-5 text-center text-sm leading-none">{medal}</span>
-              <a href="https://www.google.com/search?tbm=isch&q={quote_plus(d['name'])}" target="_blank" rel="noopener"
-                 class="flex-1 text-sm text-gray-700 dark:text-gray-200 truncate hover:text-green-600 dark:hover:text-green-400 transition-colors">{escape(dn)}</a>
-              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fodmap_badge(d['fodmap'])}" data-i18n="fodmap.{d['fodmap']}">{fl}</span>
-              <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fitness_badge(d['fitness'])}" data-i18n="fitness.{d['fitness']}">{fit}</span>
-            </div>"""
+        # One block per menu day, so a weekly menu already holds tomorrow's picks
+        # and the client can reveal the matching day before that day's build runs.
+        top_by_day = src.get('top_by_day')
+        if top_by_day is None:
+            rec_date = src.get('rec_date')
+            top_by_day = {rec_date: top_dishes} if top_dishes and rec_date is not None else {}
+
+        # The build day is served visible so the pre-JS view is right on the day
+        # it is generated; the client re-picks against the viewer's own clock.
+        default_key = today if today in top_by_day else ('' if '' in top_by_day else None)
+        day_blocks = ''
+        for key in sorted(top_by_day):
+            rows = ''.join(_dish_row(rank, d) for rank, d in enumerate(top_by_day[key]))
+            day_blocks += (f'\n            <div class="rec-day" data-rec-date="{key}"'
+                           f'{"" if key == default_key else " hidden"}>{rows}\n            </div>')
 
         col_headers = """
             <div class="flex items-center gap-2 pb-1 mb-0.5">
               <span class="flex-1"></span>
               <span class="shrink-0 w-[4.5rem] text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">FODMAP</span>
               <span class="shrink-0 w-[4.5rem] text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Fitness</span>
-            </div>""" if rows else ''
+            </div>""" if day_blocks else ''
 
         # On the card root (not the recommend section) so the pre-trigger check
         # still sees today's menus when a card has no recommendable dishes.
-        rec_date = src.get('rec_date')
-        rec_date_attr = f' data-rec-date="{rec_date}"' if rec_date is not None else ''
+        # An undated day ('') is whatever was current when the build ran, so it
+        # counts as a menu for the build day and no later — otherwise a daily
+        # image menu would claim to be "today" forever and suppress the
+        # "menu is being prepared" banner every morning before the trigger.
+        dates = src.get('menu_dates')
+        if dates is None:
+            rec_date = src.get('rec_date')
+            dates = [rec_date] if rec_date is not None else []
+        dates_attr = (' data-menu-dates="' +
+                      ' '.join(sorted({today if d == '' else d for d in dates})) + '"') if dates else ''
         dishes_section = f"""
-          <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700">
+          <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700"{'' if default_key is not None else ' hidden'}>
             <p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5" data-i18n="card.recommend">{i18n.cs('card.recommend')}</p>
-            {col_headers}
-            {rows}
-          </div>""" if rows else ''
+            {col_headers}{day_blocks}
+          </div>""" if day_blocks else ''
 
         stale = src.get('stale_menu', False)
         if stale:
@@ -86,7 +110,7 @@ def generate(sources, timestamp):
           </a>"""
 
         cards_html += f"""
-      <div class="anim-card card-hover bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col" style="animation-delay:{i * 80}ms"{rec_date_attr}>
+      <div class="anim-card card-hover bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col" style="animation-delay:{i * 80}ms"{dates_attr}>
         <div class="px-5 pt-5 pb-4 flex items-start justify-between gap-3">
           <div class="min-w-0">
             <h3 class="font-semibold text-gray-800 dark:text-gray-100 leading-tight">{name}</h3>
@@ -227,18 +251,29 @@ def generate(sources, timestamp):
         document.getElementById('cards-grid').style.display = 'none';
         document.getElementById('weekend-msg').style.display = 'block';
       }} else {{
-        // Cards carry data-rec-date when they have a today menu ("" = undated,
-        // always current). Hide a card's recommendations only if they belong to
-        // a specific past day (stale deploy).
+        // Each card carries one .rec-day block per menu day it has picks for
+        // ("" = undated, i.e. whatever was current at build time). A weekly menu
+        // therefore already holds today's block on the morning before today's
+        // build has run, so reveal the block matching the viewer's clock rather
+        // than the build's. A dated match wins over the undated fallback.
+        document.querySelectorAll('#cards-grid .recommend-section').forEach(sec => {{
+          let dated = null, undated = null;
+          sec.querySelectorAll('.rec-day').forEach(d => {{
+            d.hidden = true;
+            const rd = d.getAttribute('data-rec-date');
+            if (rd === _today) dated = d;
+            else if (rd === '') undated = d;
+          }});
+          const shown = dated || undated;
+          if (shown) shown.hidden = false;
+          sec.hidden = !shown;
+        }});
+        // data-menu-dates lists every day the card has a menu for, which is a
+        // wider set than the days with recommendations — a card whose today menu
+        // is all soup still counts as "today's build has landed".
         let hasToday = false;
-        document.querySelectorAll('#cards-grid [data-rec-date]').forEach(card => {{
-          const d = card.getAttribute('data-rec-date');
-          if (d === '' || d === _today) {{
-            hasToday = true;
-          }} else {{
-            const rs = card.querySelector('.recommend-section');
-            if (rs) rs.style.display = 'none';
-          }}
+        document.querySelectorAll('#cards-grid [data-menu-dates]').forEach(card => {{
+          if (card.getAttribute('data-menu-dates').split(' ').indexOf(_today) !== -1) hasToday = true;
         }});
         // Pre-trigger: today's build hasn't run yet, so the page still shows the
         // previous day. Until ~noon, say so explicitly instead of looking dead.

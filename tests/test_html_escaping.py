@@ -46,13 +46,15 @@ def test_index_page_escapes_dish_name():
     assert '&lt;script&gt;x&lt;/script&gt;' in out
 
 
-def test_index_page_card_carries_rec_date():
+def test_index_page_card_carries_menu_dates():
     sources = [{
         'name': 'Test', 'url': 'https://example.com', 'result_file': 'test_results.html',
-        'last_updated': '2026-07-11 10:00', 'rec_date': '',
-        'top_dishes': [],
+        'last_updated': '2026-07-11 10:00', 'menu_dates': [''],
+        'top_by_day': {}, 'top_dishes': [],
     }]
     out = index_page.generate(sources, '2026-07-11 10:00')
-    # Attribute lives on the card even when there is no recommend-section.
-    assert 'data-rec-date=""' in out
-    assert "#cards-grid [data-rec-date]" in out
+    # Attribute lives on the card even when there is no recommend-section, so a
+    # today menu with nothing recommendable still counts as "the build landed".
+    # An undated day is stamped with the build date.
+    assert 'data-menu-dates="2026-07-11"' in out
+    assert "#cards-grid [data-menu-dates]" in out
