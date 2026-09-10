@@ -102,30 +102,56 @@ def recommend_date(data):
     return '' if has_undated else None
 
 
-def get_top_dishes(data, n=3):
-    today = datetime.now().strftime('%Y-%m-%d')
-    scored = []
-    for day in data.get('days', []):
-        date_str = _parse_date(day.get('day', ''))
-        is_today = not date_str or date_str == today
-        for dish in day.get('dishes', []):
-            name = _clean_name(dish.get('name', ''))
-            if not _is_main_dish(name):
-                continue
-            fodmap  = dish.get('fodmap_level', 'Moderate')
-            fitness = dish.get('fitness_level') or _stars_to_level(dish.get('fitness_stars', 0))
-            if fodmap == 'High' and fitness == 'Low':
-                continue
-            score = _FODMAP_SCORE.get(fodmap, 2) + _FITNESS_SCORE.get(fitness, 2)
-            scored.append({'name': name, 'fodmap': fodmap, 'fitness': fitness, 'score': score, 'today': is_today})
+def menu_dates(data):
+    """Every date the menu carries, as a set. Undated days appear as ''.
 
-    pool = [d for d in scored if d['today']]
-    if not pool:
-        return []
-    pool.sort(key=lambda d: d['score'], reverse=True)
+    Lets the index tell "this card has a menu for today" apart from "this card
+    has *recommendations* for today" — a day of nothing but soups has the former
+    and not the latter.
+    """
+    return {_parse_date(day.get('day', '')) or '' for day in data.get('days', [])}
+
+
+def _score_dish(dish):
+    """Scored entry for one dish, or None when it isn't recommendable."""
+    name = _clean_name(dish.get('name', ''))
+    if not _is_main_dish(name):
+        return None
+    fodmap  = dish.get('fodmap_level', 'Moderate')
+    fitness = dish.get('fitness_level') or _stars_to_level(dish.get('fitness_stars', 0))
+    if fodmap == 'High' and fitness == 'Low':
+        return None
+    return {
+        'name': name, 'fodmap': fodmap, 'fitness': fitness,
+        'score': _FODMAP_SCORE.get(fodmap, 2) + _FITNESS_SCORE.get(fitness, 2),
+    }
+
+
+def _top_of(dishes, n):
+    scored = [s for s in (_score_dish(d) for d in dishes) if s]
+    scored.sort(key=lambda d: d['score'], reverse=True)
     seen, result = set(), []
-    for d in pool:
+    for d in scored:
         if d['name'] not in seen and len(result) < n:
             seen.add(d['name'])
             result.append(d)
     return result
+
+
+def get_top_dishes_by_day(data, n=3):
+    """Top dishes for *every* day in the menu, keyed by date ('' when undated).
+
+    A weekly menu is analyzed in full by a single run, so handing the index every
+    day lets a card show the right day's picks before that day's build has fired
+    — instead of sitting on the build day's picks until the next trigger.
+    """
+    buckets = {}
+    for day in data.get('days', []):
+        key = _parse_date(day.get('day', '')) or ''
+        buckets.setdefault(key, []).extend(day.get('dishes', []))
+    return {k: top for k, top in ((k, _top_of(d, n)) for k, d in buckets.items()) if top}
+
+
+def get_top_dishes(data, n=3):
+    by_day = get_top_dishes_by_day(data, n)
+    return by_day.get(datetime.now().strftime('%Y-%m-%d')) or by_day.get('', [])

@@ -10,7 +10,9 @@ from tacek.downloader import (
 )
 from tacek.analyzer import analyze_pdf, analyze_text, analyze_image
 from tacek.ftp import upload
-from tacek.ranking import get_top_dishes, has_today_menu, recommend_date
+from tacek.ranking import (
+    get_top_dishes, get_top_dishes_by_day, has_today_menu, menu_dates, recommend_date,
+)
 from tacek.geocoder import geocode
 from tacek.html import menu_page, index_page, profile_page, logs_page
 from tacek.logger import log
@@ -189,6 +191,8 @@ def create_index_html(results_dir, sources):
     for src in sources:
         if src.get('no_menu') or not src.get('result_file'):
             src['top_dishes'] = []
+            src['top_by_day'] = {}
+            src['menu_dates'] = []
             src['rec_date'] = None
             continue
         data_path = os.path.join(results_dir, src['result_file'].replace('_results.html', '_data.json'))
@@ -197,23 +201,36 @@ def create_index_html(results_dir, sources):
             src['top_dishes'] = get_top_dishes(data)
             src['stale_menu'] = not has_today_menu(data)
             src['rec_date'] = recommend_date(data)
+            # Carry every day from today on, so a weekly menu can serve the right
+            # day's picks on later mornings before that day's build has fired.
+            # Days already past can never match a future viewing date, so they're
+            # dropped to keep index.html small.
+            src['top_by_day'] = {k: v for k, v in get_top_dishes_by_day(data).items()
+                                 if k == '' or k >= today}
+            src['menu_dates'] = sorted(d for d in menu_dates(data) if d == '' or d >= today)
             # Freshness guard: an undated menu (recommend_date == '') is only
             # really "today" if its content was first seen today. Otherwise a
             # stale, unchanged image would keep showing as the current day.
+            # Dated days gate themselves against the viewer's clock; the undated
+            # bucket has no date to check, so it is what gets dropped here.
             seen = src.get('content_seen_date')
             if seen is not None and seen != today and src['rec_date'] == '':
                 src['stale_menu'] = True
                 src['top_dishes'] = []
                 src['rec_date'] = None
+                src['top_by_day'].pop('', None)
+                src['menu_dates'] = [d for d in src['menu_dates'] if d != '']
         except Exception:
             # Unreadable data → don't advertise it as today's menu.
             src['top_dishes'] = []
+            src['top_by_day'] = {}
+            src['menu_dates'] = []
             src['stale_menu'] = True
             src['rec_date'] = None
 
     index_path = os.path.join(results_dir, 'index.html')
     with open(index_path, 'w', encoding='utf-8') as f:
-        f.write(index_page.generate(sources, timestamp))
+        f.write(index_page.generate(sources, timestamp, today))
     log(f"Index page written to {index_path}")
     upload(index_path, 'index.html')
 
