@@ -165,6 +165,33 @@ class TestIndexPage:
         assert 'id="preparing-msg"' in html
         assert "getElementById('preparing-msg')" in html
 
+    def test_easter_eggs_ship_but_stay_out_of_the_way(self):
+        # The eggs are opt-in: a click streak, a key sequence, leaving the tab.
+        # Nothing here may render into the page on a normal visit.
+        html = self._gen()
+        assert 'ArrowUp' in html and "KONAMI" in html
+        assert "querySelector('.logo-glow')" in html
+        assert 'visibilitychange' in html
+        assert '#egg-toast' in html
+        # The toast and the falling emoji are created by script, never served.
+        assert '<div id="egg-toast"' not in html
+        assert 'class="egg-drop"' not in html
+
+    def test_easter_eggs_respect_reduced_motion(self):
+        # Same promise the rest of the page should keep: no motion for viewers
+        # who asked for none. The toast still fires, only the animation drops.
+        html = self._gen()
+        assert '@media (prefers-reduced-motion: reduce)' in html
+        assert "matchMedia('(prefers-reduced-motion: reduce)')" in html
+        assert 'if (reduce) return;' in html
+
+    def test_konami_targets_the_medal_span(self):
+        # The medal column is what the konami egg swaps, so the selector has to
+        # keep matching the markup _dish_row emits.
+        html = self._gen()
+        assert "querySelectorAll('.rec-day span.w-5')" in html
+        assert '<span class="shrink-0 w-5 text-center' in html
+
 
 # ── menu_page ────────────────────────────────────────────────────────────────
 

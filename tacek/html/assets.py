@@ -200,3 +200,124 @@ LANG_JS = (
       applyLang(_detectLang());
     })();"""
 )
+
+
+# ── Easter eggs ──────────────────────────────────────────────
+# Hidden extras for whoever pokes at the page. Deliberately inert on a normal
+# visit: every one is opt-in (a click streak, a key sequence, leaving the tab),
+# nothing shifts layout, and the moving parts bow out under reduced motion.
+
+EASTER_CSS = """<style>
+    #egg-toast {
+      position: fixed; left: 50%; bottom: 1.5rem; z-index: 9999;
+      transform: translateX(-50%) translateY(1rem); opacity: 0;
+      background: #111827; color: #f9fafb; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+      padding: 0.6rem 1rem; border-radius: 9999px; max-width: 90vw; text-align: center;
+      font-size: 0.8125rem; font-weight: 500; pointer-events: none;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+    #egg-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .dark #egg-toast { background: #f9fafb; color: #111827; }
+    .egg-drop {
+      position: fixed; top: -2rem; z-index: 9998; font-size: 1.5rem;
+      pointer-events: none; animation: eggFall linear forwards;
+    }
+    @keyframes eggFall { to { transform: translateY(105vh) rotate(var(--spin, 360deg)); } }
+    .egg-wobble { animation: eggWobble .4s ease; }
+    @keyframes eggWobble {
+      25% { transform: rotate(-7deg) scale(1.06); }
+      75% { transform: rotate(7deg) scale(1.06); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .egg-drop   { display: none; }
+      .egg-wobble { animation: none; }
+      #egg-toast  { transition: none; }
+    }
+  </style>"""
+
+EASTER_JS = """
+    (function() {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function toast(msg, ms) {
+        let el = document.getElementById('egg-toast');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'egg-toast';
+          document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        requestAnimationFrame(() => el.classList.add('show'));
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove('show'), ms || 2600);
+      }
+
+      function rain(chars, n) {
+        if (reduce) return;
+        for (let i = 0; i < n; i++) {
+          const d = document.createElement('div');
+          d.className = 'egg-drop';
+          d.textContent = chars[Math.floor(Math.random() * chars.length)];
+          d.style.left = (Math.random() * 96) + 'vw';
+          d.style.setProperty('--spin', (Math.random() * 720 - 360) + 'deg');
+          d.style.animationDuration = (2 + Math.random() * 1.8) + 's';
+          d.style.animationDelay = (Math.random() * 0.6) + 's';
+          d.addEventListener('animationend', () => d.remove(), { once: true });
+          document.body.appendChild(d);
+        }
+      }
+
+      // 1. Tip the tray over — seven quick clicks on the logo and lunch spills.
+      const logo = document.querySelector('.logo-glow');
+      if (logo) {
+        let hits = 0, last = 0;
+        logo.addEventListener('click', () => {
+          const now = Date.now();
+          hits = (now - last < 1200) ? hits + 1 : 1;
+          last = now;
+          if (!reduce) {
+            logo.classList.remove('egg-wobble');
+            void logo.offsetWidth;
+            logo.classList.add('egg-wobble');
+          }
+          if (hits >= 7) {
+            hits = 0;
+            rain(['🍲', '🍕', '🍗', '🥟', '🍺', '🥨', '🍰', '🥔'], 28);
+            toast('Tácek se ti vysypal. Dobrou chuť!');
+          }
+        });
+      }
+
+      // 2. Konami code — for a few seconds nobody on the podium is a loser.
+      const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown',
+                      'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+      let pos = 0;
+      document.addEventListener('keydown', e => {
+        const k = e.key || '', want = KONAMI[pos];
+        pos = (k === want || k.toLowerCase() === want) ? pos + 1 : 0;
+        if (pos !== KONAMI.length) return;
+        pos = 0;
+        const medals = [].slice.call(document.querySelectorAll('.rec-day span.w-5'));
+        const was = medals.map(m => m.textContent);
+        medals.forEach(m => { if (m.textContent.trim()) m.textContent = '🏆'; });
+        toast('🎮 Cheat aktivován: dneska se kalorie nepočítají.', 3400);
+        setTimeout(() => medals.forEach((m, i) => { m.textContent = was[i]; }), 3400);
+      });
+
+      // 3. Leave the tab and it nags. The title is re-read on every hide, so the
+      //    language toggle stays the authority on what the real one is.
+      let realTitle = null;
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          realTitle = document.title;
+          document.title = 'Vrať se, vychládá ti to 🍲';
+        } else if (realTitle !== null) {
+          document.title = realTitle;
+          realTitle = null;
+        }
+      });
+
+      // 4. For whoever opens DevTools on a lunch menu.
+      console.log('%c🍽 Tácek', 'font-size:20px;font-weight:bold;color:#22c55e');
+      console.log('%cHledáš oběd i v konzoli? Respekt. Zkus ↑↑↓↓←→←→BA.', 'color:#6b7280');
+    })();"""

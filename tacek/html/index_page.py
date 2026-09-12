@@ -1,7 +1,7 @@
 import json
 from html import escape
 from urllib.parse import quote_plus
-from tacek.html.assets import CHIP_CSS, THEME_JS, LANG_JS
+from tacek.html.assets import CHIP_CSS, THEME_JS, LANG_JS, EASTER_CSS, EASTER_JS
 from tacek.html.components import head, fodmap_badge, fitness_badge, FODMAP_CZ, FITNESS_CZ
 from tacek.html import i18n
 
@@ -170,7 +170,7 @@ def generate(sources, timestamp, today=None):
 
     return f"""<!DOCTYPE html>
 <html lang="cs">
-{head("Tácek &ndash; Restaurace", leaflet_css + CHIP_CSS)}
+{head("Tácek &ndash; Restaurace", leaflet_css + CHIP_CSS + EASTER_CSS)}
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen">
 
   <header class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
@@ -244,6 +244,7 @@ def generate(sources, timestamp, today=None):
     {THEME_JS}
     const PAGE_TITLE_KEY = "title.index";
     {LANG_JS}
+    {EASTER_JS}
     (function() {{
       const _today = new Date().toLocaleDateString('sv');
       const _dow   = new Date().getDay();
