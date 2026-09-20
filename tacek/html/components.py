@@ -1,8 +1,6 @@
-import re
-from datetime import datetime
 from tacek.html.assets import DARK_INIT, TAILWIND, CHIP_CSS
 from tacek.html import i18n
-from tacek.ranking import _weekday_date
+from tacek.ranking import _parse_date
 
 FODMAP_CZ  = {'Low': 'Nízký', 'Moderate': 'Střední', 'High': 'Vysoký'}
 FITNESS_CZ = {'Low': 'Slabé', 'Medium': 'Dobré', 'High': 'Výborné'}
@@ -30,20 +28,8 @@ def stars_to_level(stars):
 
 
 def parse_date(label):
-    label = str(label)
-    m = re.search(r'(\d{1,2})[.\s]+(\d{1,2})[.\s]+(\d{4})', label)
-    if m:
-        try:
-            return datetime(int(m.group(3)), int(m.group(2)), int(m.group(1))).strftime('%Y-%m-%d')
-        except ValueError:
-            pass
-    m = re.search(r'(\d{1,2})\.\s*(\d{1,2})\.', label)
-    if m:
-        try:
-            return datetime(datetime.now().year, int(m.group(2)), int(m.group(1))).strftime('%Y-%m-%d')
-        except ValueError:
-            pass
-    return _weekday_date(label)
+    """Date of a menu day label, shared with ranking so both agree on a day."""
+    return _parse_date(label)
 
 
 def head(title, extra_css=''):
