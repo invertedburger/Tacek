@@ -131,9 +131,10 @@ def test_analyze_image_groq_vision_success(tmp_path):
     img = tmp_path / 'menu.jpg'
     img.write_bytes(b'\xff\xd8\xff' + b'x' * 20)
     mock_groq = _mock_groq_response(_SAMPLE)
-    with patch.object(analyzer, '_groq', mock_groq):
-        with patch.object(analyzer, '_downscale_image', return_value=(b'img', 'image/jpeg')):
-            result = analyzer.analyze_image(str(img))
+    with patch.object(analyzer, '_GROQ_VISION_MODEL', 'some/vision-model'):
+        with patch.object(analyzer, '_groq', mock_groq):
+            with patch.object(analyzer, '_downscale_image', return_value=(b'img', 'image/jpeg')):
+                result = analyzer.analyze_image(str(img))
     assert result == _SAMPLE
 
 
@@ -145,11 +146,28 @@ def test_analyze_image_groq_fail_falls_back_to_gemini(tmp_path):
     mock_gemini = MagicMock()
     mock_gemini.files.upload.return_value = MagicMock()
     mock_gemini.models.generate_content.return_value.text = json.dumps(_SAMPLE)
-    with patch.object(analyzer, '_groq', mock_groq):
-        with patch.object(analyzer, '_downscale_image', return_value=(b'img', 'image/jpeg')):
+    with patch.object(analyzer, '_GROQ_VISION_MODEL', 'some/vision-model'):
+        with patch.object(analyzer, '_groq', mock_groq):
+            with patch.object(analyzer, '_downscale_image', return_value=(b'img', 'image/jpeg')):
+                with patch.object(analyzer, '_gemini', mock_gemini):
+                    result = analyzer.analyze_image(str(img))
+    assert result == _SAMPLE
+
+
+def test_analyze_image_no_vision_model_skips_groq(tmp_path):
+    """Groq offers no vision model, so an empty id must go straight to Gemini."""
+    img = tmp_path / 'menu.jpg'
+    img.write_bytes(b'\xff\xd8\xff' + b'x' * 20)
+    mock_groq = _mock_groq_response(_SAMPLE)
+    mock_gemini = MagicMock()
+    mock_gemini.files.upload.return_value = MagicMock()
+    mock_gemini.models.generate_content.return_value.text = json.dumps(_SAMPLE)
+    with patch.object(analyzer, '_GROQ_VISION_MODEL', ''):
+        with patch.object(analyzer, '_groq', mock_groq):
             with patch.object(analyzer, '_gemini', mock_gemini):
                 result = analyzer.analyze_image(str(img))
     assert result == _SAMPLE
+    mock_groq.chat.completions.create.assert_not_called()
 
 
 def test_analyze_image_no_groq_uses_gemini(tmp_path):

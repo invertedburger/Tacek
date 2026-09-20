@@ -54,6 +54,26 @@ def test_parse_date_weekday_name():
     assert _parse_date('Úterý') == _date_of_weekday(1)
     assert _parse_date('Tuesday') == _date_of_weekday(1)
 
+def test_parse_date_week_range_uses_weekday_name():
+    """Il Paladar labels every day with the whole week ("Pondělí 14. 9. - 18. 9. 2026")."""
+    assert _parse_date('Pondělí 14. 9. - 18. 9. 2026') == '2026-09-14'
+    assert _parse_date('Úterý 14. 9. - 18. 9. 2026') == '2026-09-15'
+    assert _parse_date('Středa 14. 9. - 18. 9. 2026') == '2026-09-16'
+    assert _parse_date('Čtvrtek 14. 9. - 18. 9. 2026') == '2026-09-17'
+    assert _parse_date('Pátek 14. 9. - 18. 9. 2026') == '2026-09-18'
+
+def test_parse_date_week_range_days_are_distinct():
+    labels = [f'{d} 14. 9. - 18. 9. 2026' for d in ('Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek')]
+    assert len({_parse_date(l) for l in labels}) == 5
+
+def test_parse_date_week_range_without_weekday_takes_start():
+    assert _parse_date('14. 9. - 18. 9. 2026') == '2026-09-14'
+
+def test_parse_date_range_over_new_year_keeps_start_in_previous_year():
+    # 29. 12. is a Tuesday, so Monday resolves to the 28th — in 2026, not 2027.
+    assert _parse_date('Pondělí 29. 12. - 2. 1. 2027') == '2026-12-28'
+    assert _parse_date('Pátek 29. 12. - 2. 1. 2027') == '2027-01-01'
+
 def test_parse_date_invalid_day():
     assert _parse_date('32.13.2026') is None
 

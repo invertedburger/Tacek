@@ -5,7 +5,8 @@ import base64
 import tempfile
 from google import genai
 from google.genai import types
-from tacek.config import API_KEY, GEMINI_MODEL, GROQ_API_KEY
+from tacek.config import (API_KEY, GEMINI_MODEL, GROQ_API_KEY, GROQ_TEXT_MODEL,
+                          GROQ_VISION_MODEL, GROQ_REASONING_EFFORT, GROQ_MAX_TOKENS)
 from tacek.logger import log
 
 _gemini = genai.Client(api_key=API_KEY)
@@ -63,6 +64,8 @@ Reward protein and vegetables; penalise deep-frying, heavy cream, and refined-ca
 - Create one entry in days[] per distinct day the menu shows. A weekly menu yields one entry per weekday; a single-day menu yields one entry.
 - Set "day" to that day's date and/or weekday name EXACTLY as printed on the menu, e.g. "Pondělí 9.6.2026", "Úterý 10.6.", or just "Středa". Copy whatever date or weekday is shown verbatim.
 - NEVER leave "day" empty or blank when any date or weekday name is visible anywhere on the menu (header, corner, per-day heading) — always copy it. Use an empty label ONLY when the menu shows no date and no weekday at all.
+- If the menu states a date RANGE for the whole week (e.g. "14. 9. - 18. 9. 2026"), never copy the range itself into "day". Count the days forward from the start of the range so that EVERY label ends with its own date: "Pondělí 14.9.2026", "Úterý 15.9.2026", "Středa 16.9.2026" and so on. A bare weekday name is wrong whenever the menu shows a range — the week it belongs to would be lost.
+- NEVER invent a date or weekday that is not printed on the menu. A menu headed only "Víkendová nabídka" or "Polední nabídka" with no date gets an empty "day" — guessing a weekday makes the site show the wrong day's food.
 
 == general rules ==
 - Always keep the original Czech food name verbatim.
@@ -70,8 +73,16 @@ Reward protein and vegetables; penalise deep-frying, heavy cream, and refined-ca
 - Soups/"polévka" and the daily soup line still get extracted if listed.
 - If the image/text is NOT an actual menu with specific dishes, return {"days": []}."""
 
-_GROQ_TEXT_MODEL = "llama-3.3-70b-versatile"
-_GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+_GROQ_TEXT_MODEL = GROQ_TEXT_MODEL
+_GROQ_VISION_MODEL = GROQ_VISION_MODEL
+
+
+def _groq_kwargs():
+    """Call options a reasoning model needs to actually emit the JSON body."""
+    opts = {"response_format": {"type": "json_object"}, "max_completion_tokens": GROQ_MAX_TOKENS}
+    if GROQ_REASONING_EFFORT:
+        opts["reasoning_effort"] = GROQ_REASONING_EFFORT
+    return opts
 
 
 def _parse(text):
@@ -90,7 +101,7 @@ def _groq_text(text, source_name):
         resp = _groq.chat.completions.create(
             model=_GROQ_TEXT_MODEL,
             messages=[{"role": "user", "content": JSON_PROMPT + f"\n\nMenu text from {source_name}:\n{text}"}],
-            response_format={"type": "json_object"},
+            **_groq_kwargs(),
         )
         return _parse(resp.choices[0].message.content)
     except Exception as e:
@@ -99,7 +110,7 @@ def _groq_text(text, source_name):
 
 
 def _groq_image(image_path):
-    if not _groq:
+    if not _groq or not _GROQ_VISION_MODEL:
         return None
     try:
         log(f"Analyzing image with Groq: {image_path}")
@@ -114,7 +125,7 @@ def _groq_image(image_path):
                     {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
                 ],
             }],
-            response_format={"type": "json_object"},
+            **_groq_kwargs(),
         )
         result = _parse(resp.choices[0].message.content)
         log(f"Groq vision extracted {len(result.get('days', []))} day(s) from {os.path.basename(image_path)}")
@@ -161,7 +172,10 @@ def _gemini_text(text, source_name):
 
 def _gemini_image(image_path):
     try:
-        log(f"Trying Gemini fallback for image: {image_path}")
+        # Not a fallback when Groq has no vision model configured — say so,
+        # so the run log does not read as if Groq had failed.
+        why = "fallback" if _GROQ_VISION_MODEL else "analysis"
+        log(f"Gemini image {why}: {os.path.basename(image_path)}")
         uploaded = _gemini.files.upload(file=image_path)
         resp = _gemini.models.generate_content(
             model=GEMINI_MODEL,

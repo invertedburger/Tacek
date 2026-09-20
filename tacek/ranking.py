@@ -52,20 +52,54 @@ def _clean_name(name):
     return re.sub(r'^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]+\s*:\s*', '', name).strip()
 
 
+_DATE_RE = re.compile(r'(\d{1,2})[.\s]+(\d{1,2})(?:[.\s]+(\d{4}))?')
+
+
+def _weekday_index(label):
+    """Weekday index of the first weekday name in the label, or None."""
+    low = str(label).lower()
+    hits = [(low.index(name), dow) for name, dow in _WEEKDAYS.items() if name in low]
+    return min(hits)[1] if hits else None
+
+
+def _all_dates(label):
+    """Every valid date in the label, in order. A year stated once applies to all.
+
+    Weekly menus label a day with the whole week's range ("Pondělí 14. 9. -
+    18. 9. 2026"), where only the last date carries the year.
+    """
+    raw = [(int(m.group(1)), int(m.group(2)), m.group(3)) for m in _DATE_RE.finditer(str(label))]
+    year = next((int(y) for _, _, y in raw if y), datetime.now().year)
+    dates = []
+    for day, month, y in raw:
+        try:
+            dates.append(datetime(int(y) if y else year, month, day))
+        except ValueError:
+            pass
+    # A range over New Year ("29. 12. - 2. 1. 2027") states only the later year,
+    # so an inherited year would push the start of the week a year forward.
+    for i in range(len(dates) - 2, -1, -1):
+        if dates[i] > dates[i + 1]:
+            dates[i] = dates[i].replace(year=dates[i].year - 1)
+    return dates
+
+
 def _parse_date(label):
     label = str(label)
-    m = re.search(r'(\d{1,2})[.\s]+(\d{1,2})[.\s]+(\d{4})', label)
-    if m:
-        try:
-            return datetime(int(m.group(3)), int(m.group(2)), int(m.group(1))).strftime('%Y-%m-%d')
-        except ValueError:
-            pass
-    m = re.search(r'(\d{1,2})\.\s*(\d{1,2})\.', label)
-    if m:
-        try:
-            return datetime(datetime.now().year, int(m.group(2)), int(m.group(1))).strftime('%Y-%m-%d')
-        except ValueError:
-            pass
+    dates = _all_dates(label)
+    if len(dates) > 1:
+        # A date range covers the whole week, so the weekday name — not the
+        # range itself — says which day this entry is. Without it every day of
+        # the menu would collapse onto the same date.
+        dow = _weekday_index(label)
+        if dow is not None:
+            for d in dates:
+                if d.weekday() == dow:
+                    return d.strftime('%Y-%m-%d')
+            monday = dates[0] - timedelta(days=dates[0].weekday())
+            return (monday + timedelta(days=dow)).strftime('%Y-%m-%d')
+    if dates:
+        return dates[0].strftime('%Y-%m-%d')
     return _weekday_date(label)
 
 
