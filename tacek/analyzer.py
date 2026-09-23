@@ -1,6 +1,7 @@
 import re
 import json
 import os
+import time
 import base64
 import tempfile
 from google import genai
@@ -88,7 +89,61 @@ def _groq_kwargs():
 def _parse(text):
     text = re.sub(r'```json\s*', '', text)
     text = re.sub(r'```\s*', '', text)
-    return json.loads(text.strip())
+    # Models occasionally tack stray closing brackets onto otherwise valid JSON,
+    # so decode the first complete value instead of failing on the leftovers.
+    obj, _ = json.JSONDecoder().raw_decode(text.strip())
+    return obj
+
+
+def _short(e, limit=200):
+    """One-line, trimmed error text — a raw provider error can run to kilobytes."""
+    msg = ' '.join(str(e).split())
+    return msg if len(msg) <= limit else msg[:limit] + '…'
+
+
+_TRANSIENT = ('UNAVAILABLE', 'RESOURCE_EXHAUSTED', 'overloaded', 'rate_limit',
+              '503', '502', '500', '429')
+
+
+def _is_transient(e):
+    msg = str(e)
+    return any(marker in msg for marker in _TRANSIENT)
+
+
+def _with_retry(call, what, attempts=3, base_delay=4):
+    """Run call(), retrying provider hiccups — a 503 must not blank a menu."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return call()
+        except Exception as e:
+            if attempt == attempts or not _is_transient(e):
+                raise
+            delay = base_delay * attempt
+            log(f"{what} is busy ({_short(e, 80)}), retrying in {delay}s [{attempt}/{attempts - 1}]")
+            time.sleep(delay)
+
+
+def _failed_generation(e):
+    """The text Groq generated but rejected, when its own JSON check trips."""
+    body = getattr(e, 'body', None)
+    if isinstance(body, dict):
+        error = body.get('error')
+        if isinstance(error, dict):
+            return error.get('failed_generation')
+    return None
+
+
+def _salvage(e, source_name):
+    """Recover a rejected-but-parseable Groq completion, or None."""
+    gen = _failed_generation(e)
+    if not gen:
+        return None
+    try:
+        data = _parse(gen)
+    except Exception:
+        return None
+    log(f"Recovered {source_name} from Groq's rejected output ({len(data.get('days', []))} day(s))")
+    return data
 
 
 # ── Groq (primary) ─────────────────────────────────────────
@@ -98,14 +153,17 @@ def _groq_text(text, source_name):
         return None
     try:
         log(f"Analyzing {source_name} with Groq...")
-        resp = _groq.chat.completions.create(
+        resp = _with_retry(lambda: _groq.chat.completions.create(
             model=_GROQ_TEXT_MODEL,
             messages=[{"role": "user", "content": JSON_PROMPT + f"\n\nMenu text from {source_name}:\n{text}"}],
             **_groq_kwargs(),
-        )
+        ), f"Groq ({source_name})")
         return _parse(resp.choices[0].message.content)
     except Exception as e:
-        log(f"ERROR: Groq text failed for {source_name}: {e}")
+        salvaged = _salvage(e, source_name)
+        if salvaged is not None:
+            return salvaged
+        log(f"ERROR: Groq text failed for {source_name}: {_short(e)}")
         return None
 
 
@@ -116,7 +174,7 @@ def _groq_image(image_path):
         log(f"Analyzing image with Groq: {image_path}")
         img_bytes, mime = _downscale_image(image_path)
         b64 = base64.b64encode(img_bytes).decode()
-        resp = _groq.chat.completions.create(
+        resp = _with_retry(lambda: _groq.chat.completions.create(
             model=_GROQ_VISION_MODEL,
             messages=[{
                 "role": "user",
@@ -126,12 +184,15 @@ def _groq_image(image_path):
                 ],
             }],
             **_groq_kwargs(),
-        )
+        ), "Groq vision")
         result = _parse(resp.choices[0].message.content)
         log(f"Groq vision extracted {len(result.get('days', []))} day(s) from {os.path.basename(image_path)}")
         return result
     except Exception as e:
-        log(f"ERROR: Groq vision failed for {image_path}: {e}")
+        salvaged = _salvage(e, os.path.basename(image_path))
+        if salvaged is not None:
+            return salvaged
+        log(f"ERROR: Groq vision failed for {image_path}: {_short(e)}")
         return None
 
 
@@ -159,14 +220,14 @@ def _downscale_image(image_path, max_width=1024):
 def _gemini_text(text, source_name):
     try:
         log(f"Trying Gemini fallback for {source_name}...")
-        resp = _gemini.models.generate_content(
+        resp = _with_retry(lambda: _gemini.models.generate_content(
             model=GEMINI_MODEL,
             contents=JSON_PROMPT + f"\n\nMenu text from {source_name}:\n{text}",
             config=_JSON_CONFIG,
-        )
+        ), f"Gemini ({source_name})")
         return _parse(resp.text)
     except Exception as e:
-        log(f"ERROR: Gemini text failed for {source_name}: {e}")
+        log(f"ERROR: Gemini text failed for {source_name}: {_short(e)}")
         return None
 
 
@@ -176,15 +237,15 @@ def _gemini_image(image_path):
         # so the run log does not read as if Groq had failed.
         why = "fallback" if _GROQ_VISION_MODEL else "analysis"
         log(f"Gemini image {why}: {os.path.basename(image_path)}")
-        uploaded = _gemini.files.upload(file=image_path)
-        resp = _gemini.models.generate_content(
+        uploaded = _with_retry(lambda: _gemini.files.upload(file=image_path), "Gemini upload")
+        resp = _with_retry(lambda: _gemini.models.generate_content(
             model=GEMINI_MODEL,
             contents=[JSON_PROMPT, uploaded],
             config=_JSON_CONFIG,
-        )
+        ), "Gemini image")
         return _parse(resp.text)
     except Exception as e:
-        log(f"ERROR: Gemini image failed for {image_path}: {e}")
+        log(f"ERROR: Gemini image failed for {os.path.basename(image_path)}: {_short(e)}")
         return None
 
 
@@ -210,15 +271,15 @@ def analyze_pdf(pdf_path):
     """Try Gemini file API first (best for PDFs), then image rendering, then text."""
     normalized = _resave_pdf(pdf_path)
     try:
-        uploaded = _gemini.files.upload(file=normalized)
-        resp = _gemini.models.generate_content(
+        uploaded = _with_retry(lambda: _gemini.files.upload(file=normalized), "Gemini upload")
+        resp = _with_retry(lambda: _gemini.models.generate_content(
             model=GEMINI_MODEL,
             contents=[JSON_PROMPT, uploaded],
             config=_JSON_CONFIG,
-        )
+        ), "Gemini (PDF)")
         return _parse(resp.text)
     except Exception as e:
-        log(f"WARNING: Gemini PDF API failed for {pdf_path}: {e}")
+        log(f"WARNING: Gemini PDF API failed for {os.path.basename(pdf_path)}: {_short(e)}")
     finally:
         if normalized != pdf_path and os.path.exists(normalized):
             try:

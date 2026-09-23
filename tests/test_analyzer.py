@@ -27,6 +27,83 @@ def test_parse_raises_on_invalid_json():
         analyzer._parse('not json at all')
 
 
+def test_parse_tolerates_trailing_junk():
+    """gpt-oss appended stray closers ("}]}]}]}"), which Groq then rejected."""
+    data = {'days': [{'day': 'Pondělí 21.9.2026', 'dishes': []}]}
+    assert analyzer._parse(json.dumps(data) + ']}]}') == data
+
+
+def test_short_trims_long_provider_errors():
+    assert len(analyzer._short(Exception('x' * 5000))) <= 201
+
+
+def test_short_collapses_newlines():
+    assert '\n' not in analyzer._short(Exception('line one\nline two'))
+
+
+# ── retry / salvage ───────────────────────────────────────────────────────────
+
+def test_with_retry_retries_transient_error():
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise Exception("503 UNAVAILABLE. Model is overloaded")
+        return 'ok'
+
+    with patch.object(analyzer.time, 'sleep', lambda s: None):
+        assert analyzer._with_retry(flaky, 'test') == 'ok'
+    assert len(calls) == 3
+
+
+def test_with_retry_does_not_retry_permanent_error():
+    calls = []
+
+    def broken():
+        calls.append(1)
+        raise Exception('404 model_not_found')
+
+    with patch.object(analyzer.time, 'sleep', lambda s: None):
+        with pytest.raises(Exception):
+            analyzer._with_retry(broken, 'test')
+    assert len(calls) == 1
+
+
+def test_with_retry_gives_up_after_last_attempt():
+    calls = []
+
+    def always_busy():
+        calls.append(1)
+        raise Exception('503 UNAVAILABLE')
+
+    with patch.object(analyzer.time, 'sleep', lambda s: None):
+        with pytest.raises(Exception):
+            analyzer._with_retry(always_busy, 'test', attempts=3)
+    assert len(calls) == 3
+
+
+def test_groq_text_salvages_rejected_generation():
+    """Groq 400s on its own malformed output but hands the text back — use it."""
+    data = {'days': [{'day': 'Pondělí 21.9.2026', 'dishes': []}]}
+    err = Exception('400 json_validate_failed')
+    err.body = {'error': {'code': 'json_validate_failed',
+                          'failed_generation': json.dumps(data) + ']}'}}
+    mock_groq = MagicMock()
+    mock_groq.chat.completions.create.side_effect = err
+    with patch.object(analyzer, '_groq', mock_groq):
+        assert analyzer._groq_text('menu text', 'test') == data
+
+
+def test_groq_text_returns_none_when_nothing_to_salvage():
+    err = Exception('400 bad request')
+    err.body = {'error': {'message': 'nope'}}
+    mock_groq = MagicMock()
+    mock_groq.chat.completions.create.side_effect = err
+    with patch.object(analyzer, '_groq', mock_groq):
+        assert analyzer._groq_text('menu text', 'test') is None
+
+
 # ── JSON_PROMPT rubric guards (don't silently lose the scoring guidance) ───────
 
 def test_prompt_requests_json_for_groq_json_mode():
