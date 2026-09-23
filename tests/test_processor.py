@@ -59,6 +59,37 @@ def test_split_links_skips_empty_pdf_entries():
     assert pdfs == ['https://a.com/a.pdf']
 
 
+# ── drop_impossible_dates ─────────────────────────────────────────────────────
+
+def _day(label):
+    return {'days': [{'day': label, 'dishes': [{'name': 'Svíčková'}]}]}
+
+
+def test_drop_impossible_dates_blanks_misprinted_date():
+    # U Tesaře headed the 22. 9. poster "22. 6. 2026".
+    data = processor.drop_impossible_dates(_day('22. 6. 2026'), 'U Tesaře')
+    assert data['days'][0]['day'] == ''
+    assert data['days'][0]['dishes']          # the food itself is untouched
+
+
+def test_drop_impossible_dates_keeps_todays_date():
+    today = processor.datetime.now().strftime('%-d. %-m. %Y' if os.name != 'nt' else '%#d. %#m. %Y')
+    data = processor.drop_impossible_dates(_day(today), 'test')
+    assert data['days'][0]['day'] == today
+
+
+def test_drop_impossible_dates_keeps_next_weeks_menu():
+    nextweek = processor.datetime.now() + processor.timedelta(days=9)
+    label = nextweek.strftime('%#d. %#m. %Y' if os.name == 'nt' else '%-d. %-m. %Y')
+    data = processor.drop_impossible_dates(_day(label), 'test')
+    assert data['days'][0]['day'] == label
+
+
+def test_drop_impossible_dates_leaves_undated_alone():
+    data = processor.drop_impossible_dates(_day('Víkendová nabídka'), 'test')
+    assert data['days'][0]['day'] == 'Víkendová nabídka'
+
+
 # ── process_all_pdfs: dynamic PDF resolution + stable caching ──────────────────
 
 def _wire_pdf_processor(monkeypatch, tmp_path, resolve, download_content=b'%PDF-1',
@@ -128,6 +159,47 @@ def test_process_all_pdfs_marks_unavailable_when_resolution_fails(tmp_path, monk
     assert sources[0]['no_menu'] is True
     assert sources[0]['result_file'] is None
     analyze.assert_not_called()
+
+
+def test_process_all_pdfs_keeps_last_menu_when_analysis_fails(tmp_path, monkeypatch):
+    # A provider outage (Gemini 503) must not blank the card when yesterday's
+    # menu is still on disk — and the hash must not advance, so the next run
+    # re-analyzes instead of trusting the cache.
+    analyze = _wire_pdf_processor(
+        monkeypatch, tmp_path,
+        resolve=lambda u: 'https://blob.example/x.pdf',
+        download_content=b'%PDF-WEEK1',
+    )
+    page = ['https://www.iqrestaurant.cz/cs/pobocky/brno']
+    processor.process_all_pdfs(page)              # first run stores a good menu
+    log_before = (tmp_path / 'processed_files.log').read_text(encoding='utf-8')
+
+    monkeypatch.setattr(processor, 'download_file',
+                        lambda url, folder: _write_pdf(folder, b'%PDF-WEEK2'))
+    analyze.return_value = None                   # provider falls over
+    sources = processor.process_all_pdfs(page)
+
+    assert 'no_menu' not in sources[0]
+    assert sources[0]['result_file'] == 'www_iqrestaurant_cz_results.html'
+    # Freshness stays anchored to the last successfully analyzed content, and
+    # the recorded hash is untouched so the next run re-analyzes week 2.
+    assert sources[0]['content_seen_date'] == log_before.strip().split('|')[-1]
+    assert (tmp_path / 'processed_files.log').read_text(encoding='utf-8') == log_before
+
+
+def test_process_all_pdfs_unavailable_when_analysis_fails_with_no_history(tmp_path, monkeypatch):
+    # Nothing cached to fall back on → the card still says "unavailable".
+    analyze = _wire_pdf_processor(monkeypatch, tmp_path, resolve=lambda u: 'https://blob.example/x.pdf')
+    analyze.return_value = None
+    sources = processor.process_all_pdfs(['https://www.iqrestaurant.cz/cs/pobocky/brno'])
+    assert sources[0]['no_menu'] is True
+
+
+def _write_pdf(folder, content):
+    path = os.path.join(folder, 'menu.pdf')
+    with open(path, 'wb') as f:
+        f.write(content)
+    return path
 
 
 # ── JSON helpers ──────────────────────────────────────────────────────────────

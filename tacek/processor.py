@@ -1,7 +1,7 @@
 import os
 import json
 from urllib.parse import urlparse
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from tacek import config
 from tacek.downloader import (
@@ -12,10 +12,37 @@ from tacek.analyzer import analyze_pdf, analyze_text, analyze_image
 from tacek.ftp import upload
 from tacek.ranking import (
     get_top_dishes, get_top_dishes_by_day, has_today_menu, menu_dates, recommend_date,
+    _parse_date,
 )
 from tacek.geocoder import geocode
 from tacek.html import menu_page, index_page, profile_page, logs_page
 from tacek.logger import log
+
+
+# A menu may legitimately run two weeks ahead; anything further is a misprint.
+_MAX_DATE_DRIFT_DAYS = 14
+
+
+def drop_impossible_dates(data, source_name):
+    """Blank a day label dated nowhere near today, so a typo can't hide a menu.
+
+    Restaurants do misprint their posters — U Tesaře published the 22. 9. menu
+    headed "22. 6. 2026" — and a date months out would mark a perfectly current
+    menu as not-for-today. Undated hands freshness back to the content hash,
+    which is exactly how undated posters are already handled.
+    """
+    today = datetime.now().date()
+    for day in data.get('days', []):
+        label = day.get('day', '')
+        parsed = _parse_date(label)
+        if not parsed:
+            continue
+        drift = abs((datetime.strptime(parsed, '%Y-%m-%d').date() - today).days)
+        if drift > _MAX_DATE_DRIFT_DAYS:
+            log(f"WARNING: {source_name} menu dated '{label}' is {drift} days from today "
+                f"— looks like a misprint, treating it as undated.")
+            day['day'] = ''
+    return data
 
 
 def split_links(pdf_links, webpage_links):
@@ -73,20 +100,30 @@ def process_all_pdfs(pdf_links):
                 log(f"Cache for {source_name} is stale, re-analyzing...")
 
         content_changed = prev_hash != fhash
+        kept_last_good = False
         if data is None:
             log(f"Analyzing {pdf_path} with Gemini...")
             data = analyze_pdf(pdf_path)
             if data is None:
-                log(f"No menu data for {source_name}, marking as unavailable.")
-                sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
-                continue
-            _save_json(data, data_path)
+                # Same reasoning as the webpage path: keep the last good menu
+                # over a blank card when the analysis itself fell over.
+                previous = _load_json(data_path) if os.path.exists(data_path) else None
+                if not previous:
+                    log(f"No menu data for {source_name}, marking as unavailable.")
+                    sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
+                    continue
+                log(f"Analysis failed for {source_name}, keeping the last known menu.")
+                data = previous
+                kept_last_good = True
+            else:
+                _save_json(drop_impossible_dates(data, source_name), data_path)
 
         # Same first-seen anchoring as the webpage path, so an undated PDF menu
         # can't keep masquerading as "today" (see ranking.recommend_date).
-        seen_date = today if content_changed else (prev_date or 'unknown')
-        processed[source_name] = f"{fhash}|{seen_date}"
-        _save_log(processed, log_path)
+        seen_date = today if (content_changed and not kept_last_good) else (prev_date or 'unknown')
+        if not kept_last_good:
+            processed[source_name] = f"{fhash}|{seen_date}"
+            _save_log(processed, log_path)
 
         _write_and_upload(menu_page.generate(data, restaurant_name, url, timestamp), result_path, result_name)
         upload(data_path, data_name)
@@ -142,21 +179,31 @@ def process_all_webpages(webpage_links):
         # A None cache_key means an image fetch failed — freshness is unknown,
         # so it must not count as changed content or clobber the last good hash.
         content_changed = cache_key is not None and prev_hash != cache_key
+        kept_last_good = False
         if data is None:
             log(f"Analyzing {url} with Gemini...")
             data = _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_name)
             if data is None:
-                log(f"No menu data for {url}, marking as unavailable.")
-                sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
-                continue
-            _save_json(data, data_path)
+                # A failed analysis is usually a provider outage, not a closed
+                # restaurant. The last good menu, flagged as old, beats a blank
+                # card — and the hash stays put so the next run tries again.
+                previous = _load_json(data_path) if os.path.exists(data_path) else None
+                if not previous:
+                    log(f"No menu data for {url}, marking as unavailable.")
+                    sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
+                    continue
+                log(f"Analysis failed for {url}, keeping the last known menu.")
+                data = previous
+                kept_last_good = True
+            else:
+                _save_json(drop_impossible_dates(data, source_name), data_path)
 
         # Anchor undated menus to the date their content was first seen, so a
         # stale/unchanged image can't keep masquerading as "today" (see
         # ranking.recommend_date). Changed content == today; an unchanged legacy
         # entry with no recorded date is "unknown" → treated as not-today.
-        seen_date = today if content_changed else (prev_date or 'unknown')
-        if cache_key is not None:
+        seen_date = today if (content_changed and not kept_last_good) else (prev_date or 'unknown')
+        if cache_key is not None and not kept_last_good:
             processed[url] = f"{cache_key}|{seen_date}"
             _save_log(processed, log_path)
 
