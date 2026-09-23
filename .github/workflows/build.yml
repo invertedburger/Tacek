@@ -28,7 +28,7 @@ jobs:
           cache: pip
 
       - name: Restore menu & analysis cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             menus/
@@ -59,6 +59,19 @@ jobs:
 
       - name: Generate site
         run: python run.py
+
+      # Saved even when the run flags a problem: actions/cache only writes on a
+      # green job, so a red run used to throw away the menus and hashes it had
+      # just fetched and the next run started from a days-old cache.
+      - name: Save menu & analysis cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            menus/
+            results/*.json
+            results/*.log
+          key: tacek-data-${{ github.run_id }}
 
       - name: Add CNAME
         if: always()

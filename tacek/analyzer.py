@@ -92,6 +92,30 @@ def _parse(text):
     # Models occasionally tack stray closing brackets onto otherwise valid JSON,
     # so decode the first complete value instead of failing on the leftovers.
     obj, _ = json.JSONDecoder().raw_decode(text.strip())
+    return _as_menu(obj)
+
+
+def _as_menu(obj):
+    """Normalize a model's answer to {'days': [...]}.
+
+    A model that returns the bare day list instead of the wrapper used to crash
+    the whole run on the next .get('days') — one restaurant's odd answer must
+    not cost the other five their menus.
+    """
+    if isinstance(obj, list):
+        return {'days': obj}
+    if not isinstance(obj, dict):
+        raise ValueError(f"menu JSON is a {type(obj).__name__}, expected object or list")
+    if 'days' not in obj:
+        # Some answers come back as a single day, or under another key.
+        if 'dishes' in obj:
+            return {'days': [obj]}
+        for value in obj.values():
+            if isinstance(value, list):
+                return {'days': value}
+    days = obj.get('days')
+    if isinstance(days, dict):
+        return {'days': [days]}
     return obj
 
 

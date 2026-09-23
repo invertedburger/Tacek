@@ -63,11 +63,15 @@ def generate(sources, timestamp, today=None):
 
         # The build day is served visible so the pre-JS view is right on the day
         # it is generated; the client re-picks against the viewer's own clock.
+        # An undated day is whatever was current when the build ran, so it is
+        # published under the build's date, exactly like data-menu-dates below.
+        # Left as '' it kept showing on later mornings, so Friday's picks
+        # greeted Monday's visitor as "recommended today".
         default_key = today if today in top_by_day else ('' if '' in top_by_day else None)
         day_blocks = ''
         for key in sorted(top_by_day):
             rows = ''.join(_dish_row(rank, d) for rank, d in enumerate(top_by_day[key]))
-            day_blocks += (f'\n            <div class="rec-day" data-rec-date="{key}"'
+            day_blocks += (f'\n            <div class="rec-day" data-rec-date="{today if key == "" else key}"'
                            f'{"" if key == default_key else " hidden"}>{rows}\n            </div>')
 
         col_headers = """
@@ -252,22 +256,19 @@ def generate(sources, timestamp, today=None):
         document.getElementById('cards-grid').style.display = 'none';
         document.getElementById('weekend-msg').style.display = 'block';
       }} else {{
-        // Each card carries one .rec-day block per menu day it has picks for
-        // ("" = undated, i.e. whatever was current at build time). A weekly menu
+        // Each card carries one .rec-day block per menu day it has picks for,
+        // an undated menu being published under its build date. A weekly menu
         // therefore already holds today's block on the morning before today's
         // build has run, so reveal the block matching the viewer's clock rather
-        // than the build's. A dated match wins over the undated fallback.
+        // than the build's — and show nothing when no block belongs to today.
         document.querySelectorAll('#cards-grid .recommend-section').forEach(sec => {{
-          let dated = null, undated = null;
+          let dated = null;
           sec.querySelectorAll('.rec-day').forEach(d => {{
             d.hidden = true;
-            const rd = d.getAttribute('data-rec-date');
-            if (rd === _today) dated = d;
-            else if (rd === '') undated = d;
+            if (d.getAttribute('data-rec-date') === _today) dated = d;
           }});
-          const shown = dated || undated;
-          if (shown) shown.hidden = false;
-          sec.hidden = !shown;
+          if (dated) dated.hidden = false;
+          sec.hidden = !dated;
         }});
         // data-menu-dates lists every day the card has a menu for, which is a
         // wider set than the days with recommendations — a card whose today menu
