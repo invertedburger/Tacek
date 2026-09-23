@@ -45,6 +45,21 @@ def drop_impossible_dates(data, source_name):
     return data
 
 
+def describe_menu(data, restaurant_name, today=None):
+    """One log line saying which days a menu actually covers.
+
+    Day coverage is where this pipeline goes wrong — collapsed labels, a menu
+    still on last week, a model dropping days — and none of it was visible in
+    the log until the card came out wrong.
+    """
+    today = today or datetime.now().strftime('%Y-%m-%d')
+    dates = sorted(_parse_date(d.get('day', '')) or '?' for d in data.get('days', []))
+    dishes = sum(len(d.get('dishes', [])) for d in data.get('days', []))
+    span = f"{dates[0]}…{dates[-1]}" if len(dates) > 1 else (dates[0] if dates else 'no days')
+    mark = 'has today' if has_today_menu(data) else 'NOT for today'
+    log(f"{restaurant_name}: {len(dates)} day(s) {span}, {dishes} dishes — {mark}")
+
+
 def split_links(pdf_links, webpage_links):
     # pdf_links are explicitly declared PDF sources — even if the entry points at
     # a page that the PDF link is resolved from (see resolve_pdf_link), not a
@@ -67,68 +82,83 @@ def process_all_pdfs(pdf_links):
     sources = []
 
     for url in pdf_links:
-        # Identity (data files, display name) is keyed on the *config* URL's domain,
-        # so it stays stable even when the resolved PDF lives on dynamic storage.
-        domain = urlparse(url).netloc
-        source_name = domain.replace('.', '_')
-        restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
+        # Resolved up front so the guard below can still name the card if the
+        # very first step throws.
+        restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(urlparse(url).netloc, urlparse(url).netloc)
+        guard_mark = len(sources)
+        try:
+            # Identity (data files, display name) is keyed on the *config* URL's domain,
+            # so it stays stable even when the resolved PDF lives on dynamic storage.
+            domain = urlparse(url).netloc
+            source_name = domain.replace('.', '_')
+            restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
 
-        pdf_url = resolve_pdf_link(url)
-        pdf_path = download_file(pdf_url, config.DOWNLOAD_DIR) if pdf_url else None
-        if pdf_path is None:
-            log(f"Skipping {restaurant_name} — download failed.")
-            sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
-            continue
-        fhash = file_hash(pdf_path)
-        result_name = f"{source_name}_results.html"
-        data_name   = f"{source_name}_data.json"
-        result_path = os.path.join(config.RESULTS_DIR, result_name)
-        data_path   = os.path.join(config.RESULTS_DIR, data_name)
+            pdf_url = resolve_pdf_link(url)
+            pdf_path = download_file(pdf_url, config.DOWNLOAD_DIR) if pdf_url else None
+            if pdf_path is None:
+                log(f"Skipping {restaurant_name} — download failed.")
+                sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
+                continue
+            fhash = file_hash(pdf_path)
+            result_name = f"{source_name}_results.html"
+            data_name   = f"{source_name}_data.json"
+            result_path = os.path.join(config.RESULTS_DIR, result_name)
+            data_path   = os.path.join(config.RESULTS_DIR, data_name)
 
-        # Log value is "hash|first_seen_date"; legacy entries are bare "hash".
-        prev_hash, _, prev_date = str(processed.get(source_name, '')).partition('|')
+            # Log value is "hash|first_seen_date"; legacy entries are bare "hash".
+            prev_hash, _, prev_date = str(processed.get(source_name, '')).partition('|')
 
-        data = None
-        # Cache key is the stable source_name (not the filename, which can change
-        # weekly on dynamic PDF URLs); freshness is decided by the content hash.
-        if source_name in processed and prev_hash == fhash and os.path.exists(data_path):
-            cached = _load_json(data_path)
-            if has_today_menu(cached):
-                log(f"No change in {source_name}, regenerating HTML from cache.")
-                data = cached
-            else:
-                log(f"Cache for {source_name} is stale, re-analyzing...")
+            data = None
+            # Cache key is the stable source_name (not the filename, which can change
+            # weekly on dynamic PDF URLs); freshness is decided by the content hash.
+            if source_name in processed and prev_hash == fhash and os.path.exists(data_path):
+                cached = _load_json(data_path)
+                if has_today_menu(cached):
+                    log(f"No change in {source_name}, regenerating HTML from cache.")
+                    data = cached
+                else:
+                    log(f"Cache for {source_name} is stale, re-analyzing...")
 
-        content_changed = prev_hash != fhash
-        kept_last_good = False
-        if data is None:
-            log(f"Analyzing {pdf_path} with Gemini...")
-            data = analyze_pdf(pdf_path)
+            content_changed = prev_hash != fhash
+            kept_last_good = False
             if data is None:
-                # Same reasoning as the webpage path: keep the last good menu
-                # over a blank card when the analysis itself fell over.
-                previous = _load_json(data_path) if os.path.exists(data_path) else None
-                if not previous:
-                    log(f"No menu data for {source_name}, marking as unavailable.")
-                    sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
-                    continue
-                log(f"Analysis failed for {source_name}, keeping the last known menu.")
-                data = previous
-                kept_last_good = True
-            else:
-                _save_json(drop_impossible_dates(data, source_name), data_path)
+                log(f"Analyzing {pdf_path} with Gemini...")
+                data = analyze_pdf(pdf_path)
+                if data is None:
+                    # Same reasoning as the webpage path: keep the last good menu
+                    # over a blank card when the analysis itself fell over.
+                    previous = _load_json(data_path) if os.path.exists(data_path) else None
+                    if not previous:
+                        log(f"No menu data for {source_name}, marking as unavailable.")
+                        sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
+                        continue
+                    log(f"Analysis failed for {source_name}, keeping the last known menu.")
+                    data = previous
+                    kept_last_good = True
+                else:
+                    _save_json(drop_impossible_dates(data, source_name), data_path)
 
-        # Same first-seen anchoring as the webpage path, so an undated PDF menu
-        # can't keep masquerading as "today" (see ranking.recommend_date).
-        seen_date = today if (content_changed and not kept_last_good) else (prev_date or 'unknown')
-        if not kept_last_good:
-            processed[source_name] = f"{fhash}|{seen_date}"
-            _save_log(processed, log_path)
+            # Same first-seen anchoring as the webpage path, so an undated PDF menu
+            # can't keep masquerading as "today" (see ranking.recommend_date).
+            seen_date = today if (content_changed and not kept_last_good) else (prev_date or 'unknown')
+            if not kept_last_good:
+                processed[source_name] = f"{fhash}|{seen_date}"
+                _save_log(processed, log_path)
 
-        _write_and_upload(menu_page.generate(data, restaurant_name, url, timestamp), result_path, result_name)
-        upload(data_path, data_name)
-        sources.append({'name': restaurant_name, 'url': url, 'result_file': result_name,
-                        'last_updated': timestamp, 'content_seen_date': seen_date})
+            describe_menu(data, restaurant_name, today)
+            _write_and_upload(menu_page.generate(data, restaurant_name, url, timestamp), result_path, result_name)
+            upload(data_path, data_name)
+            sources.append({'name': restaurant_name, 'url': url, 'result_file': result_name,
+                            'last_updated': timestamp, 'content_seen_date': seen_date})
+
+        except Exception as e:
+            # One restaurant's surprise — a model answering in an unexpected
+            # shape, a mangled page — used to abort the whole run and leave the
+            # site on the previous build. Drop just this card instead.
+            log(f"ERROR: {restaurant_name} crashed, skipping it: {e!r}")
+            del sources[guard_mark:]
+            sources.append({'name': restaurant_name, 'url': url, 'result_file': None,
+                            'last_updated': timestamp, 'no_menu': True})
 
     return sources
 
@@ -141,76 +171,91 @@ def process_all_webpages(webpage_links):
     sources = []
 
     for url in webpage_links:
-        domain       = urlparse(url).netloc
-        source_name  = domain.replace('.', '_')
-        result_name  = f"{source_name}_results.html"
-        data_name    = f"{source_name}_data.json"
-        result_path  = os.path.join(config.RESULTS_DIR, result_name)
-        data_path    = os.path.join(config.RESULTS_DIR, data_name)
-        restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
-        parser = config.WEBPAGE_PARSERS.get(domain, 'auto')
+        # Resolved up front so the guard below can still name the card if the
+        # very first step throws.
+        restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(urlparse(url).netloc, urlparse(url).netloc)
+        guard_mark = len(sources)
+        try:
+            domain       = urlparse(url).netloc
+            source_name  = domain.replace('.', '_')
+            result_name  = f"{source_name}_results.html"
+            data_name    = f"{source_name}_data.json"
+            result_path  = os.path.join(config.RESULTS_DIR, result_name)
+            data_path    = os.path.join(config.RESULTS_DIR, data_name)
+            restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(domain, domain)
+            parser = config.WEBPAGE_PARSERS.get(domain, 'auto')
 
-        html_content = download_webpage(url)
-        if html_content is None:
-            log(f"Skipping {restaurant_name} — download failed.")
-            sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
-            continue
-        menu_text = extract_menu_text(html_content)
+            html_content = download_webpage(url)
+            if html_content is None:
+                log(f"Skipping {restaurant_name} — download failed.")
+                sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
+                continue
+            menu_text = extract_menu_text(html_content)
 
-        if parser == 'image':
-            image_urls = find_menu_images(html_content, url)
-            cache_key  = image_content_hash(image_urls)
-        else:
-            cache_key  = text_hash(menu_text)
-            image_urls = []
-
-        # Log value is "hash|first_seen_date"; legacy entries are bare "hash".
-        prev_hash, _, prev_date = str(processed.get(url, '')).partition('|')
-
-        data = None
-        if url in processed and cache_key is not None and prev_hash == cache_key and os.path.exists(data_path):
-            cached = _load_json(data_path)
-            if has_today_menu(cached):
-                log(f"No change in {url}, regenerating HTML from cache.")
-                data = cached
+            if parser == 'image':
+                image_urls = find_menu_images(html_content, url)
+                cache_key  = image_content_hash(image_urls)
             else:
-                log(f"Cache for {url} is stale, re-analyzing...")
+                cache_key  = text_hash(menu_text)
+                image_urls = []
 
-        # A None cache_key means an image fetch failed — freshness is unknown,
-        # so it must not count as changed content or clobber the last good hash.
-        content_changed = cache_key is not None and prev_hash != cache_key
-        kept_last_good = False
-        if data is None:
-            log(f"Analyzing {url} with Gemini...")
-            data = _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_name)
+            # Log value is "hash|first_seen_date"; legacy entries are bare "hash".
+            prev_hash, _, prev_date = str(processed.get(url, '')).partition('|')
+
+            data = None
+            if url in processed and cache_key is not None and prev_hash == cache_key and os.path.exists(data_path):
+                cached = _load_json(data_path)
+                if has_today_menu(cached):
+                    log(f"No change in {url}, regenerating HTML from cache.")
+                    data = cached
+                else:
+                    log(f"Cache for {url} is stale, re-analyzing...")
+
+            # A None cache_key means an image fetch failed — freshness is unknown,
+            # so it must not count as changed content or clobber the last good hash.
+            content_changed = cache_key is not None and prev_hash != cache_key
+            kept_last_good = False
             if data is None:
-                # A failed analysis is usually a provider outage, not a closed
-                # restaurant. The last good menu, flagged as old, beats a blank
-                # card — and the hash stays put so the next run tries again.
-                previous = _load_json(data_path) if os.path.exists(data_path) else None
-                if not previous:
-                    log(f"No menu data for {url}, marking as unavailable.")
-                    sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
-                    continue
-                log(f"Analysis failed for {url}, keeping the last known menu.")
-                data = previous
-                kept_last_good = True
-            else:
-                _save_json(drop_impossible_dates(data, source_name), data_path)
+                log(f"Analyzing {url} with Gemini...")
+                data = _fetch_and_analyze(parser, html_content, url, menu_text, image_urls, source_name)
+                if data is None:
+                    # A failed analysis is usually a provider outage, not a closed
+                    # restaurant. The last good menu, flagged as old, beats a blank
+                    # card — and the hash stays put so the next run tries again.
+                    previous = _load_json(data_path) if os.path.exists(data_path) else None
+                    if not previous:
+                        log(f"No menu data for {url}, marking as unavailable.")
+                        sources.append({'name': restaurant_name, 'url': url, 'result_file': None, 'last_updated': timestamp, 'no_menu': True})
+                        continue
+                    log(f"Analysis failed for {url}, keeping the last known menu.")
+                    data = previous
+                    kept_last_good = True
+                else:
+                    _save_json(drop_impossible_dates(data, source_name), data_path)
 
-        # Anchor undated menus to the date their content was first seen, so a
-        # stale/unchanged image can't keep masquerading as "today" (see
-        # ranking.recommend_date). Changed content == today; an unchanged legacy
-        # entry with no recorded date is "unknown" → treated as not-today.
-        seen_date = today if (content_changed and not kept_last_good) else (prev_date or 'unknown')
-        if cache_key is not None and not kept_last_good:
-            processed[url] = f"{cache_key}|{seen_date}"
-            _save_log(processed, log_path)
+            # Anchor undated menus to the date their content was first seen, so a
+            # stale/unchanged image can't keep masquerading as "today" (see
+            # ranking.recommend_date). Changed content == today; an unchanged legacy
+            # entry with no recorded date is "unknown" → treated as not-today.
+            seen_date = today if (content_changed and not kept_last_good) else (prev_date or 'unknown')
+            if cache_key is not None and not kept_last_good:
+                processed[url] = f"{cache_key}|{seen_date}"
+                _save_log(processed, log_path)
 
-        _write_and_upload(menu_page.generate(data, restaurant_name, url, timestamp), result_path, result_name)
-        upload(data_path, data_name)
-        sources.append({'name': restaurant_name, 'url': url, 'result_file': result_name,
-                        'last_updated': timestamp, 'content_seen_date': seen_date})
+            describe_menu(data, restaurant_name, today)
+            _write_and_upload(menu_page.generate(data, restaurant_name, url, timestamp), result_path, result_name)
+            upload(data_path, data_name)
+            sources.append({'name': restaurant_name, 'url': url, 'result_file': result_name,
+                            'last_updated': timestamp, 'content_seen_date': seen_date})
+
+        except Exception as e:
+            # One restaurant's surprise — a model answering in an unexpected
+            # shape, a mangled page — used to abort the whole run and leave the
+            # site on the previous build. Drop just this card instead.
+            log(f"ERROR: {restaurant_name} crashed, skipping it: {e!r}")
+            del sources[guard_mark:]
+            sources.append({'name': restaurant_name, 'url': url, 'result_file': None,
+                            'last_updated': timestamp, 'no_menu': True})
 
     return sources
 

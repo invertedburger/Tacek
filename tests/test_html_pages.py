@@ -108,7 +108,7 @@ class TestIndexPage:
         # viewer's local date, not by the build timestamp.
         html = self._gen()
         assert 'class="rec-day" data-rec-date=' in html
-        assert "rd === _today" in html
+        assert "=== _today" in html
         assert "#cards-grid .recommend-section" in html
         assert "#cards-grid [data-menu-dates]" in html
 
@@ -146,10 +146,19 @@ class TestIndexPage:
         # "menu is being prepared" banner could never fire.
         assert 'data-menu-dates="2026-04-11"' in self._gen()
 
-    def test_undated_block_still_renders_undated(self):
-        # The block itself stays undated and visible: the prep banner explains
-        # that it is the previous day's menu rather than hiding it.
-        assert '<div class="rec-day" data-rec-date="">' in self._gen()
+    def test_undated_block_is_published_under_the_build_date(self):
+        # An undated menu is only known to be current on the day it was built,
+        # so it is dated with the build day. Left as "" the client kept showing
+        # it on later mornings — Friday's picks as Monday's recommendation.
+        html = self._gen()
+        assert '<div class="rec-day" data-rec-date="2026-04-11"' in html
+        assert 'data-rec-date=""' not in html
+
+    def test_undated_block_hidden_for_a_later_viewer(self):
+        # Same page opened on a later day: no block carries that date, so the
+        # client has nothing to reveal and the prep banner does the talking.
+        html = self._gen()
+        assert 'data-rec-date="2026-04-12"' not in html
 
     def test_recommend_section_hidden_when_no_day_matches_build(self):
         src = _src()
