@@ -34,6 +34,7 @@ JSON_PROMPT = """You are a nutrition analyst for a Czech lunch-menu site. Extrac
           "problematic_ingredients": ["gluten", "onion"],
           "protein_g": 35,
           "carbs_g": 45,
+          "fiber_g": 6,
           "fat_g": 15,
           "calories_kcal": 450
         }
@@ -60,6 +61,7 @@ Reward protein and vegetables; penalise deep-frying, heavy cream, and refined-ca
 - Assume a standard Czech lunch portion (main ~120-200 g protein source plus its stated side).
 - Base the estimate on the actual components named; be realistic, not optimistic.
 - Keep them internally consistent: calories_kcal should ≈ protein_g*4 + carbs_g*4 + fat_g*9 (within ~10%).
+- fiber_g is part of carbs_g, not extra. Vegetables, legumes, wholegrain and potatoes with skin raise it; white rice, pasta, knedlíky, fries and meat alone keep it low. A typical Czech lunch lands around 3-8 g; a vegetable- or legume-heavy plate can reach 10-15 g.
 
 == day labels (critical for showing the correct day) ==
 - Create one entry in days[] per distinct day the menu shows. A weekly menu yields one entry per weekday; a single-day menu yields one entry.

@@ -146,23 +146,33 @@ def menu_dates(data):
     return {_parse_date(day.get('day', '')) or '' for day in data.get('days', [])}
 
 
-def _score_dish(dish):
-    """Scored entry for one dish, or None when it isn't recommendable."""
+_MACROS = ('protein_g', 'carbs_g', 'fiber_g')
+
+
+def _score_dish(dish, strict=True):
+    """Scored entry for one dish, or None when it isn't recommendable.
+
+    strict=False keeps High-FODMAP + Low-fitness mains, for the days when they
+    are all a restaurant cooks (see get_top_dishes_by_day's fallback).
+    """
     name = _clean_name(dish.get('name', ''))
     if not _is_main_dish(name):
         return None
     fodmap  = dish.get('fodmap_level', 'Moderate')
     fitness = dish.get('fitness_level') or _stars_to_level(dish.get('fitness_stars', 0))
-    if fodmap == 'High' and fitness == 'Low':
+    if strict and fodmap == 'High' and fitness == 'Low':
         return None
-    return {
+    entry = {
         'name': name, 'fodmap': fodmap, 'fitness': fitness,
         'score': _FODMAP_SCORE.get(fodmap, 2) + _FITNESS_SCORE.get(fitness, 2),
     }
+    # Macros ride along for the card; older analyses may lack some (fiber_g).
+    entry.update({k: dish[k] for k in _MACROS if isinstance(dish.get(k), (int, float))})
+    return entry
 
 
-def _top_of(dishes, n):
-    scored = [s for s in (_score_dish(d) for d in dishes) if s]
+def _top_of(dishes, n, strict=True):
+    scored = [s for s in (_score_dish(d, strict) for d in dishes) if s]
     scored.sort(key=lambda d: d['score'], reverse=True)
     seen, result = set(), []
     for d in scored:
@@ -172,18 +182,30 @@ def _top_of(dishes, n):
     return result
 
 
-def get_top_dishes_by_day(data, n=3):
+def get_top_dishes_by_day(data, n=3, fallback=False):
     """Top dishes for *every* day in the menu, keyed by date ('' when undated).
 
     A weekly menu is analyzed in full by a single run, so handing the index every
     day lets a card show the right day's picks before that day's build has fired
     — instead of sitting on the build day's picks until the next trigger.
+
+    With fallback=True, a day whose mains are all unrecommendable still gets its
+    mains, each marked suitable=False. Otherwise the card went blank on such a
+    day (Kometa Pub, 25. 9.: pea mash, fried cheese, gyros with fries) and looked
+    broken rather than honest.
     """
     buckets = {}
     for day in data.get('days', []):
         key = _parse_date(day.get('day', '')) or ''
         buckets.setdefault(key, []).extend(day.get('dishes', []))
-    return {k: top for k, top in ((k, _top_of(d, n)) for k, d in buckets.items()) if top}
+    result = {}
+    for key, dishes in buckets.items():
+        top = _top_of(dishes, n)
+        if not top and fallback:
+            top = [{**d, 'suitable': False} for d in _top_of(dishes, n, strict=False)]
+        if top:
+            result[key] = top
+    return result
 
 
 def get_top_dishes(data, n=3):

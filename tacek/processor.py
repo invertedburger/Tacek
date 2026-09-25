@@ -56,7 +56,9 @@ def describe_menu(data, restaurant_name, today=None):
     dates = sorted(_parse_date(d.get('day', '')) or '?' for d in data.get('days', []))
     dishes = sum(len(d.get('dishes', [])) for d in data.get('days', []))
     span = f"{dates[0]}…{dates[-1]}" if len(dates) > 1 else (dates[0] if dates else 'no days')
-    mark = 'has today' if has_today_menu(data) else 'NOT for today'
+    # Same rule as ranking.has_today_menu (undated counts as today), but against
+    # the given day rather than the wall clock, so the line is testable.
+    mark = 'has today' if any(d in ('?', today) for d in dates) else 'NOT for today'
     log(f"{restaurant_name}: {len(dates)} day(s) {span}, {dishes} dishes — {mark}")
 
 
@@ -296,8 +298,9 @@ def create_index_html(results_dir, sources):
             # Carry every day from today on, so a weekly menu can serve the right
             # day's picks on later mornings before that day's build has fired.
             # Days already past can never match a future viewing date, so they're
-            # dropped to keep index.html small.
-            src['top_by_day'] = {k: v for k, v in get_top_dishes_by_day(data).items()
+            # dropped to keep index.html small. A day with nothing recommendable
+            # still carries its mains (flagged unsuitable) so the card isn't blank.
+            src['top_by_day'] = {k: v for k, v in get_top_dishes_by_day(data, fallback=True).items()
                                  if k == '' or k >= today}
             src['menu_dates'] = sorted(d for d in menu_dates(data) if d == '' or d >= today)
             # Freshness guard: an undated menu (recommend_date == '') is only
