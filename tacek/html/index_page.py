@@ -6,18 +6,48 @@ from tacek.html.components import head, fodmap_badge, fitness_badge, FODMAP_CZ, 
 from tacek.html import i18n
 
 
+# (dish field, i18n key, dot colour, text colour) — one hue per macro, kept
+# apart from the green/amber/red the FODMAP and fitness pills already use.
+_MACRO_STYLE = (
+    ('protein_g', 'macro.protein', 'bg-sky-500',    'text-sky-700 dark:text-sky-300'),
+    ('carbs_g',   'macro.carbs',   'bg-orange-400', 'text-orange-700 dark:text-orange-300'),
+    ('fiber_g',   'macro.fiber',   'bg-lime-500',   'text-lime-700 dark:text-lime-300'),
+)
+
+
+def _macros(d):
+    """Coloured protein / carbs / fiber line under a dish name; absent values are skipped."""
+    parts = ''
+    for field, key, dot, text in _MACRO_STYLE:
+        if field not in d:
+            continue
+        parts += (f'<span class="inline-flex items-center gap-1 {text}" '
+                  f'data-i18n-attr="title:{key}.full" title="{i18n.cs(key + ".full")}">'
+                  f'<span class="w-1.5 h-1.5 rounded-full {dot}"></span>'
+                  f'{round(d[field])}&nbsp;g <span data-i18n="{key}">{i18n.cs(key)}</span></span>')
+    if not parts:
+        return ''
+    # Full row width, indented past the medal column: squeezed beside the two
+    # badges it wrapped onto a second line at phone width.
+    return f'\n                <div class="flex flex-wrap gap-x-3 pl-7 text-[11px] leading-tight mt-0.5">{parts}</div>'
+
+
 def _dish_row(rank, d):
     dn    = d['name'].capitalize() if d['name'] == d['name'].upper() else d['name']
     fl    = FODMAP_CZ.get(d['fodmap'], d['fodmap'])
     fit   = FITNESS_CZ.get(d['fitness'], d['fitness'])
-    medal = ['🥇', '🥈', '🥉'][rank] if rank < 3 else ''
+    suitable = d.get('suitable', True)
+    # Medals rank recommendations; an unsuitable fallback dish earns none.
+    medal = ['🥇', '🥈', '🥉'][rank] if rank < 3 and suitable else ''
     return f"""
-              <div class="flex items-center gap-2 py-1.5 border-b border-gray-50 dark:border-gray-700/60 last:border-0">
-                <span class="shrink-0 w-5 text-center text-sm leading-none">{medal}</span>
-                <a href="https://www.google.com/search?tbm=isch&q={quote_plus(d['name'])}" target="_blank" rel="noopener"
-                   class="flex-1 text-sm text-gray-700 dark:text-gray-200 truncate hover:text-green-600 dark:hover:text-green-400 transition-colors">{escape(dn)}</a>
-                <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fodmap_badge(d['fodmap'])}" data-i18n="fodmap.{d['fodmap']}">{fl}</span>
-                <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fitness_badge(d['fitness'])}" data-i18n="fitness.{d['fitness']}">{fit}</span>
+              <div class="py-1.5 border-b border-gray-50 dark:border-gray-700/60 last:border-0{'' if suitable else ' opacity-60'}">
+                <div class="flex items-center gap-2">
+                  <span class="shrink-0 w-5 text-center text-sm leading-none">{medal}</span>
+                  <a href="https://www.google.com/search?tbm=isch&q={quote_plus(d['name'])}" target="_blank" rel="noopener"
+                     class="flex-1 min-w-0 text-sm text-gray-700 dark:text-gray-200 truncate hover:text-green-600 dark:hover:text-green-400 transition-colors">{escape(dn)}</a>
+                  <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fodmap_badge(d['fodmap'])}" data-i18n="fodmap.{d['fodmap']}">{fl}</span>
+                  <span class="shrink-0 w-[4.5rem] text-center px-1.5 py-0.5 rounded-full text-xs font-medium {fitness_badge(d['fitness'])}" data-i18n="fitness.{d['fitness']}">{fit}</span>
+                </div>{_macros(d)}
               </div>"""
 
 
@@ -68,11 +98,18 @@ def generate(sources, timestamp, today=None):
         # Left as '' it kept showing on later mornings, so Friday's picks
         # greeted Monday's visitor as "recommended today".
         default_key = today if today in top_by_day else ('' if '' in top_by_day else None)
+
+        def _is_fallback(key):
+            # Every dish unsuitable = nothing passed the filter that day.
+            return all(d.get('suitable') is False for d in top_by_day[key])
+
         day_blocks = ''
         for key in sorted(top_by_day):
             rows = ''.join(_dish_row(rank, d) for rank, d in enumerate(top_by_day[key]))
             day_blocks += (f'\n            <div class="rec-day" data-rec-date="{today if key == "" else key}"'
+                           f'{" data-fallback" if _is_fallback(key) else ""}'
                            f'{"" if key == default_key else " hidden"}>{rows}\n            </div>')
+        default_fallback = default_key is not None and _is_fallback(default_key)
 
         col_headers = """
             <div class="flex items-center gap-2 pb-1 mb-0.5">
@@ -95,7 +132,8 @@ def generate(sources, timestamp, today=None):
                       ' '.join(sorted({today if d == '' else d for d in dates})) + '"') if dates else ''
         dishes_section = f"""
           <div class="recommend-section px-5 py-3 border-t border-gray-100 dark:border-gray-700"{'' if default_key is not None else ' hidden'}>
-            <p class="text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5" data-i18n="card.recommend">{i18n.cs('card.recommend')}</p>
+            <p class="rec-heading text-xs font-medium text-gray-400 dark:text-gray-500 mb-1.5" data-kind="recommend"{' hidden' if default_fallback else ''} data-i18n="card.recommend">{i18n.cs('card.recommend')}</p>
+            <p class="rec-heading text-xs font-medium text-amber-600 dark:text-amber-400 mb-1.5" data-kind="fallback"{'' if default_fallback else ' hidden'} data-i18n="card.nothing_suitable">{i18n.cs('card.nothing_suitable')}</p>
             {col_headers}{day_blocks}
           </div>""" if day_blocks else ''
 
@@ -269,6 +307,12 @@ def generate(sources, timestamp, today=None):
           }});
           if (dated) dated.hidden = false;
           sec.hidden = !dated;
+          // A day where nothing passed the filter lists its mains anyway, under
+          // a heading that says so instead of "recommended".
+          const fb = !!(dated && dated.hasAttribute('data-fallback'));
+          sec.querySelectorAll('.rec-heading').forEach(h => {{
+            h.hidden = (h.getAttribute('data-kind') === 'fallback') !== fb;
+          }});
         }});
         // data-menu-dates lists every day the card has a menu for, which is a
         // wider set than the days with recommendations — a card whose today menu

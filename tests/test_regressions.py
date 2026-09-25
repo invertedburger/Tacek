@@ -181,3 +181,135 @@ def test_describe_menu_flags_todays_menu(capsys):
     data = {'days': [{'day': '', 'dishes': [{'name': 'A'}]}]}
     processor.describe_menu(data, 'U Tesaře', today='2026-09-23')
     assert 'has today' in capsys.readouterr().out
+
+
+def test_describe_menu_uses_the_given_day_not_the_clock(capsys):
+    # This test once passed only because it ran on a day missing from the data.
+    data = {'days': [{'day': 'Pátek 25.9.2026', 'dishes': [{'name': 'A'}]}]}
+    processor.describe_menu(data, 'Kometa Pub', today='2026-09-21')
+    assert 'NOT for today' in capsys.readouterr().out
+    processor.describe_menu(data, 'Kometa Pub', today='2026-09-25')
+    assert 'has today' in capsys.readouterr().out
+
+
+# ── 2026-09-25: a card with a menu but no dishes on the main page ─────────────
+
+KOMETA_FRIDAY = {'days': [{'day': 'Pátek 25. 9. 2026', 'dishes': [
+    {'name': 'Hrachová kaše s uzeným masem a cibulkou, okurka, pečivo',
+     'fodmap_level': 'High', 'fitness_level': 'Low', 'protein_g': 28, 'carbs_g': 70, 'fiber_g': 14},
+    {'name': 'Hermelín v bramboráku, nakládaná řepa',
+     'fodmap_level': 'High', 'fitness_level': 'Low', 'protein_g': 22, 'carbs_g': 55, 'fiber_g': 5},
+    {'name': 'Kuřecí gyros, hranolky, tatarská omáčka',
+     'fodmap_level': 'High', 'fitness_level': 'Low', 'protein_g': 32, 'carbs_g': 65, 'fiber_g': 4},
+]}]}
+
+
+def test_all_unsuitable_day_still_lists_its_mains():
+    """Kometa Pub cooked three High-FODMAP/Low-fitness mains; the card went blank."""
+    by_day = get_top_dishes_by_day(KOMETA_FRIDAY, fallback=True)
+    assert len(by_day['2026-09-25']) == 3
+    assert all(d['suitable'] is False for d in by_day['2026-09-25'])
+
+
+def test_fallback_is_opt_in():
+    # Recommendations proper (get_top_dishes) must stay strict.
+    assert get_top_dishes_by_day(KOMETA_FRIDAY) == {}
+
+
+def test_fallback_never_mixes_with_real_picks():
+    data = {'days': [{'day': 'Pátek 25. 9. 2026', 'dishes': [
+        {'name': 'Gyros, hranolky', 'fodmap_level': 'High', 'fitness_level': 'Low'},
+        {'name': 'Grilované kuře, rýže', 'fodmap_level': 'Low', 'fitness_level': 'High'},
+    ]}]}
+    picks = get_top_dishes_by_day(data, fallback=True)['2026-09-25']
+    assert [d['name'] for d in picks] == ['Grilované kuře, rýže']
+    assert 'suitable' not in picks[0]
+
+
+def test_fallback_still_skips_soups_and_desserts():
+    data = {'days': [{'day': 'Pátek 25. 9. 2026', 'dishes': [
+        {'name': 'Gulášová polévka', 'fodmap_level': 'High', 'fitness_level': 'Low'},
+        {'name': 'Dukátové buchtičky s krémem', 'fodmap_level': 'High', 'fitness_level': 'Low'},
+    ]}]}
+    assert get_top_dishes_by_day(data, fallback=True) == {}
+
+
+def _card(by_day, build_day='2026-09-25'):
+    return {'name': 'Kometa Pub', 'url': 'https://www.kometapub.cz/arena',
+            'result_file': 'www_kometapub_cz_results.html', 'last_updated': f'{build_day} 11:37',
+            'top_dishes': [], 'rec_date': build_day, 'stale_menu': False,
+            'top_by_day': by_day, 'menu_dates': sorted(by_day)}
+
+
+def test_fallback_card_says_nothing_suitable_instead_of_recommending():
+    by_day = get_top_dishes_by_day(KOMETA_FRIDAY, fallback=True)
+    html = index_page.generate([_card(by_day)], '2026-09-25 11:37', '2026-09-25')
+    assert 'Hrachová kaše' in html
+    assert 'data-fallback' in html
+    # the "nothing suitable" heading is the visible one, "recommended" is hidden
+    assert 'data-kind="fallback" data-i18n' in html
+    assert 'data-kind="recommend" hidden' in html
+    assert '🥇' not in html                       # no medals for unsuitable food
+    assert 'opacity-60' in html
+
+
+def test_normal_card_keeps_the_recommend_heading():
+    data = {'days': [{'day': 'Pátek 25. 9. 2026', 'dishes': [
+        {'name': 'Grilované kuře, rýže', 'fodmap_level': 'Low', 'fitness_level': 'High'}]}]}
+    html = index_page.generate([_card(get_top_dishes_by_day(data, fallback=True))],
+                               '2026-09-25 11:37', '2026-09-25')
+    assert 'data-kind="recommend" data-i18n' in html
+    assert 'data-kind="fallback" hidden' in html
+    assert '🥇' in html
+
+
+def test_client_switches_heading_per_day():
+    html = index_page.generate([_card(get_top_dishes_by_day(KOMETA_FRIDAY, fallback=True))],
+                               '2026-09-25 11:37', '2026-09-25')
+    assert "dated.hasAttribute('data-fallback')" in html
+    assert "querySelectorAll('.rec-heading')" in html
+
+
+# ── 2026-09-25: coloured macros on the card ───────────────────────────────────
+
+def test_card_shows_protein_carbs_and_fiber():
+    by_day = get_top_dishes_by_day(KOMETA_FRIDAY, fallback=True)
+    html = index_page.generate([_card(by_day)], '2026-09-25 11:37', '2026-09-25')
+    assert '28&nbsp;g <span data-i18n="macro.protein">' in html
+    assert '70&nbsp;g <span data-i18n="macro.carbs">' in html
+    assert '14&nbsp;g <span data-i18n="macro.fiber">' in html
+
+
+def test_each_macro_has_its_own_colour():
+    html = index_page._macros({'protein_g': 30, 'carbs_g': 40, 'fiber_g': 6})
+    assert 'bg-sky-500' in html and 'bg-orange-400' in html and 'bg-lime-500' in html
+
+
+def test_macros_missing_from_older_analyses_are_skipped():
+    # Data analysed before fiber_g existed has only protein and carbs.
+    html = index_page._macros({'protein_g': 30, 'carbs_g': 40})
+    assert 'macro.fiber' not in html
+    assert 'macro.protein' in html
+
+
+def test_no_macros_no_empty_line():
+    assert index_page._macros({}) == ''
+
+
+def test_ranking_carries_macros_through():
+    picks = get_top_dishes_by_day({'days': [{'day': 'Pátek 25. 9. 2026', 'dishes': [
+        {'name': 'Grilované kuře', 'fodmap_level': 'Low', 'fitness_level': 'High',
+         'protein_g': 40, 'carbs_g': 35, 'fiber_g': 5, 'fat_g': 12}]}]})['2026-09-25']
+    assert picks[0]['protein_g'] == 40 and picks[0]['carbs_g'] == 35 and picks[0]['fiber_g'] == 5
+    assert 'fat_g' not in picks[0]                 # the card shows only what was asked for
+
+
+def test_non_numeric_macro_is_ignored():
+    picks = get_top_dishes_by_day({'days': [{'day': 'Pátek 25. 9. 2026', 'dishes': [
+        {'name': 'Grilované kuře', 'fodmap_level': 'Low', 'fitness_level': 'High',
+         'protein_g': '?', 'carbs_g': None}]}]})['2026-09-25']
+    assert 'protein_g' not in picks[0] and 'carbs_g' not in picks[0]
+
+
+def test_prompt_asks_for_fiber():
+    assert '"fiber_g"' in analyzer.JSON_PROMPT
