@@ -313,3 +313,114 @@ def test_non_numeric_macro_is_ignored():
 
 def test_prompt_asks_for_fiber():
     assert '"fiber_g"' in analyzer.JSON_PROMPT
+
+
+# ── 2026-09-27: model misread the year, the guard threw the day away ──────────
+
+_CS_DAYS = ('Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota', 'Neděle')
+
+
+def _label(d, year=None):
+    return f'{_CS_DAYS[d.weekday()]} {d.day}. {d.month}. {year or d.year}'
+
+
+def test_misread_year_is_corrected_not_blanked():
+    """Eatology's PDF says "Úterý 29. 9. 2026"; the model returned 2025. Blanking
+    it made Tuesday undated, and an undated day on a weekly menu only counts
+    for the day it was built — so Tuesday's picks would never have shown."""
+    from datetime import date, timedelta
+    d = date.today() + timedelta(days=2)
+    data = {'days': [{'day': _label(d, d.year - 1), 'dishes': [{'name': 'Kuře'}]}]}
+    processor.drop_impossible_dates(data, 'Eatology')
+    assert data['days'][0]['day'] == _label(d)
+    assert _parse_date(data['days'][0]['day']) == d.strftime('%Y-%m-%d')
+
+
+def test_year_is_not_corrected_when_the_weekday_disagrees():
+    from datetime import date, timedelta
+    d = date.today() + timedelta(days=2)
+    wrong_day = _CS_DAYS[(d.weekday() + 1) % 7]
+    data = {'days': [{'day': f'{wrong_day} {d.day}. {d.month}. {d.year - 1}', 'dishes': []}]}
+    processor.drop_impossible_dates(data, 'test')
+    assert data['days'][0]['day'] == ''
+
+
+def test_month_misprint_still_blanks():
+    # U Tesaře's "22. 6. 2026": no year change brings June near September.
+    data = {'days': [{'day': '22. 6. 2026', 'dishes': []}]}
+    processor.drop_impossible_dates(data, 'U Tesaře')
+    assert data['days'][0]['day'] == ''
+
+
+def test_year_correction_without_weekday_name():
+    from datetime import date, timedelta
+    d = date.today() + timedelta(days=1)
+    data = {'days': [{'day': f'{d.day}. {d.month}. {d.year - 1}', 'dishes': []}]}
+    processor.drop_impossible_dates(data, 'test')
+    assert data['days'][0]['day'] == f'{d.day}. {d.month}. {d.year}'
+
+
+def test_every_day_of_a_weekly_menu_survives_one_misread_year():
+    from datetime import date, timedelta
+    monday = date.today() - timedelta(days=date.today().weekday()) + timedelta(days=7)
+    week = [monday + timedelta(days=i) for i in range(5)]
+    data = {'days': [{'day': _label(d, d.year - 1 if i == 1 else None), 'dishes': []}
+                     for i, d in enumerate(week)]}
+    processor.drop_impossible_dates(data, 'Eatology')
+    assert [_parse_date(x['day']) for x in data['days']] == [d.strftime('%Y-%m-%d') for d in week]
+
+
+# ── Analysis version: a fix has to reach menus that didn't change ─────────────
+
+def test_fresh_analysis_is_stamped_with_the_current_version():
+    data = processor.stamp({'days': []})
+    assert data['_analysis'] == analyzer.ANALYSIS_VERSION
+
+
+def _wire(monkeypatch, tmp_path, analyze):
+    monkeypatch.setattr(processor.config, 'RESULTS_DIR', str(tmp_path))
+    monkeypatch.setattr(processor.config, 'DOWNLOAD_DIR', str(tmp_path))
+    monkeypatch.setattr(processor.config, 'RESTAURANT_DISPLAY_NAMES', {'good.example': 'Good'})
+    monkeypatch.setattr(processor.config, 'WEBPAGE_PARSERS', {})
+    monkeypatch.setattr(processor, 'download_webpage', lambda url: '<html>menu</html>')
+    monkeypatch.setattr(processor, 'extract_menu_text', lambda html: 'same menu text')
+    monkeypatch.setattr(processor, 'upload', lambda *a, **k: None)
+    monkeypatch.setattr(processor, 'has_today_menu', lambda d: True)
+    monkeypatch.setattr(processor.menu_page, 'generate', lambda *a, **k: '<html/>')
+    monkeypatch.setattr(processor, 'analyze_text', analyze)
+
+
+def test_unchanged_menu_from_an_older_analysis_is_redone_once(tmp_path, monkeypatch):
+    analyze = MagicMock(return_value={'days': [{'day': 'Úterý', 'dishes': []}]})
+    _wire(monkeypatch, tmp_path, analyze)
+    url = ['https://good.example/menu/']
+    processor.process_all_webpages(url)                  # analysed, stamped
+    assert analyze.call_count == 1
+
+    # Simulate a cache written before versioning existed.
+    path = tmp_path / 'good_example_data.json'
+    old = json.loads(path.read_text(encoding='utf-8'))
+    old.pop('_analysis')
+    path.write_text(json.dumps(old), encoding='utf-8')
+
+    processor.process_all_webpages(url)                  # same text, old version → redo
+    assert analyze.call_count == 2
+    processor.process_all_webpages(url)                  # now current → cache hit
+    assert analyze.call_count == 2
+
+
+def test_redo_does_not_claim_the_content_is_new(tmp_path, monkeypatch):
+    # Re-analysing unchanged text must keep its first-seen date, or an old
+    # undated poster would pass for today's.
+    analyze = MagicMock(return_value={'days': [{'day': '', 'dishes': []}]})
+    _wire(monkeypatch, tmp_path, analyze)
+    url = ['https://good.example/menu/']
+    processor.process_all_webpages(url)
+    log_path = tmp_path / 'processed_webpages.log'
+    first = log_path.read_text(encoding='utf-8')
+    path = tmp_path / 'good_example_data.json'
+    data = json.loads(path.read_text(encoding='utf-8'))
+    data.pop('_analysis')
+    path.write_text(json.dumps(data), encoding='utf-8')
+    processor.process_all_webpages(url)
+    assert log_path.read_text(encoding='utf-8') == first

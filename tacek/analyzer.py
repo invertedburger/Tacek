@@ -76,6 +76,12 @@ Reward protein and vegetables; penalise deep-frying, heavy cream, and refined-ca
 - Soups/"polévka" and the daily soup line still get extracted if listed.
 - If the image/text is NOT an actual menu with specific dishes, return {"days": []}."""
 
+# Bump whenever the prompt or the post-processing of its answer changes. A cached
+# analysis carries the version it was made with, and an older one is redone once
+# — otherwise a fix only reached a menu when the restaurant changed it.
+#   2: fiber_g in the prompt; misread years corrected instead of blanked.
+ANALYSIS_VERSION = 2
+
 _GROQ_TEXT_MODEL = GROQ_TEXT_MODEL
 _GROQ_VISION_MODEL = GROQ_VISION_MODEL
 

@@ -8,11 +8,11 @@ from tacek.downloader import (
     download_file, download_webpage, download_image, resolve_pdf_link,
     extract_menu_text, find_menu_images, file_hash, text_hash, image_content_hash,
 )
-from tacek.analyzer import analyze_pdf, analyze_text, analyze_image
+from tacek.analyzer import analyze_pdf, analyze_text, analyze_image, ANALYSIS_VERSION
 from tacek.ftp import upload
 from tacek.ranking import (
     get_top_dishes, get_top_dishes_by_day, has_today_menu, menu_dates, recommend_date,
-    _parse_date,
+    _parse_date, _weekday_index,
 )
 from tacek.geocoder import geocode
 from tacek.html import menu_page, index_page, profile_page, logs_page
@@ -23,13 +23,47 @@ from tacek.logger import log
 _MAX_DATE_DRIFT_DAYS = 14
 
 
-def drop_impossible_dates(data, source_name):
-    """Blank a day label dated nowhere near today, so a typo can't hide a menu.
+def _corrected_year(label, parsed, today):
+    """The label with its year fixed, or None when no nearby year fits.
 
-    Restaurants do misprint their posters — U Tesaře published the 22. 9. menu
-    headed "22. 6. 2026" — and a date months out would mark a perfectly current
-    menu as not-for-today. Undated hands freshness back to the content hash,
-    which is exactly how undated posters are already handled.
+    Models misread years: Eatology's PDF says "Úterý 29. 9. 2026" and the
+    analysis came back "Úterý 29. 9. 2025". Day and month are right, and the
+    weekday name confirms which year is meant — so correct it rather than
+    throwing the date away.
+    """
+    wrong = datetime.strptime(parsed, '%Y-%m-%d').date()
+    if str(wrong.year) not in label:
+        return None                      # year was inferred, nothing to swap
+    dow = _weekday_index(label)
+    for year in (today.year, today.year + 1, today.year - 1):
+        try:
+            candidate = wrong.replace(year=year)
+        except ValueError:               # 29. 2. in a non-leap year
+            continue
+        if abs((candidate - today).days) > _MAX_DATE_DRIFT_DAYS:
+            continue
+        if dow is not None and candidate.weekday() != dow:
+            continue
+        return label.replace(str(wrong.year), str(year))
+    return None
+
+
+def stamp(data):
+    """Mark a fresh analysis with the version that produced it."""
+    data['_analysis'] = ANALYSIS_VERSION
+    return data
+
+
+def drop_impossible_dates(data, source_name):
+    """Fix or blank a day label dated nowhere near today, so a typo can't hide a menu.
+
+    A wrong year with a confirming weekday is corrected (see _corrected_year).
+    Anything else is blanked: restaurants do misprint their posters — U Tesaře
+    published the 22. 9. menu headed "22. 6. 2026" — and a date months out
+    would mark a perfectly current menu as not-for-today. Undated hands
+    freshness back to the content hash, the way undated posters already work.
+    Blanking loses the weekday, so it is the last resort: on a weekly menu an
+    undated day only counts for the day it was built.
     """
     today = datetime.now().date()
     for day in data.get('days', []):
@@ -38,7 +72,14 @@ def drop_impossible_dates(data, source_name):
         if not parsed:
             continue
         drift = abs((datetime.strptime(parsed, '%Y-%m-%d').date() - today).days)
-        if drift > _MAX_DATE_DRIFT_DAYS:
+        if drift <= _MAX_DATE_DRIFT_DAYS:
+            continue
+        fixed = _corrected_year(label, parsed, today)
+        if fixed:
+            log(f"WARNING: {source_name} menu dated '{label}' has the wrong year "
+                f"— corrected to '{fixed}'.")
+            day['day'] = fixed
+        else:
             log(f"WARNING: {source_name} menu dated '{label}' is {drift} days from today "
                 f"— looks like a misprint, treating it as undated.")
             day['day'] = ''
@@ -115,7 +156,9 @@ def process_all_pdfs(pdf_links):
             # weekly on dynamic PDF URLs); freshness is decided by the content hash.
             if source_name in processed and prev_hash == fhash and os.path.exists(data_path):
                 cached = _load_json(data_path)
-                if has_today_menu(cached):
+                if cached.get('_analysis') != ANALYSIS_VERSION:
+                    log(f"Cache for {source_name} predates analysis v{ANALYSIS_VERSION}, re-analyzing...")
+                elif has_today_menu(cached):
                     log(f"No change in {source_name}, regenerating HTML from cache.")
                     data = cached
                 else:
@@ -138,7 +181,7 @@ def process_all_pdfs(pdf_links):
                     data = previous
                     kept_last_good = True
                 else:
-                    _save_json(drop_impossible_dates(data, source_name), data_path)
+                    _save_json(stamp(drop_impossible_dates(data, source_name)), data_path)
 
             # Same first-seen anchoring as the webpage path, so an undated PDF menu
             # can't keep masquerading as "today" (see ranking.recommend_date).
@@ -207,7 +250,9 @@ def process_all_webpages(webpage_links):
             data = None
             if url in processed and cache_key is not None and prev_hash == cache_key and os.path.exists(data_path):
                 cached = _load_json(data_path)
-                if has_today_menu(cached):
+                if cached.get('_analysis') != ANALYSIS_VERSION:
+                    log(f"Cache for {url} predates analysis v{ANALYSIS_VERSION}, re-analyzing...")
+                elif has_today_menu(cached):
                     log(f"No change in {url}, regenerating HTML from cache.")
                     data = cached
                 else:
@@ -233,7 +278,7 @@ def process_all_webpages(webpage_links):
                     data = previous
                     kept_last_good = True
                 else:
-                    _save_json(drop_impossible_dates(data, source_name), data_path)
+                    _save_json(stamp(drop_impossible_dates(data, source_name)), data_path)
 
             # Anchor undated menus to the date their content was first seen, so a
             # stale/unchanged image can't keep masquerading as "today" (see
