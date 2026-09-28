@@ -80,7 +80,8 @@ Reward protein and vegetables; penalise deep-frying, heavy cream, and refined-ca
 # analysis carries the version it was made with, and an older one is redone once
 # — otherwise a fix only reached a menu when the restaurant changed it.
 #   2: fiber_g in the prompt; misread years corrected instead of blanked.
-ANALYSIS_VERSION = 2
+#   3: incomplete Groq answers cross-checked with Gemini; junk null days dropped.
+ANALYSIS_VERSION = 3
 
 _GROQ_TEXT_MODEL = GROQ_TEXT_MODEL
 _GROQ_VISION_MODEL = GROQ_VISION_MODEL
@@ -111,20 +112,41 @@ def _as_menu(obj):
     not cost the other five their menus.
     """
     if isinstance(obj, list):
-        return {'days': obj}
+        return _clean_days({'days': obj})
     if not isinstance(obj, dict):
         raise ValueError(f"menu JSON is a {type(obj).__name__}, expected object or list")
     if 'days' not in obj:
         # Some answers come back as a single day, or under another key.
         if 'dishes' in obj:
-            return {'days': [obj]}
+            return _clean_days({'days': [obj]})
         for value in obj.values():
             if isinstance(value, list):
-                return {'days': value}
+                return _clean_days({'days': value})
     days = obj.get('days')
     if isinstance(days, dict):
-        return {'days': [days]}
-    return obj
+        return _clean_days({'days': [days]})
+    return _clean_days(obj)
+
+
+def _clean_days(menu):
+    """Drop junk days and give every label a string.
+
+    Groq once answered Il Paladar's week with {"day": null, "dishes": []} next
+    to two real days; a null label parses as "undated", which counts as today
+    and pinned that broken answer in the cache for the rest of the week.
+    """
+    days = []
+    for day in menu.get('days') or []:
+        if not isinstance(day, dict):
+            continue
+        label = day.get('day')
+        day['day'] = '' if label is None else str(label)
+        if not isinstance(day.get('dishes'), list):
+            day['dishes'] = []
+        if day['day'].strip() or day['dishes']:
+            days.append(day)
+    menu['days'] = days
+    return menu
 
 
 def _short(e, limit=200):
@@ -283,20 +305,70 @@ def _gemini_image(image_path):
 
 # ── Public API ──────────────────────────────────────────────
 
+_WORKDAYS = (('pondělí', 'pondeli'), ('úterý', 'utery'), ('středa', 'streda'),
+             ('čtvrtek', 'ctvrtek'), ('pátek', 'patek'))
+
+
+def _workdays(text):
+    """Indexes (Mon=0 … Fri=4) of the workday names a text mentions."""
+    low = str(text).lower()
+    return {i for i, names in enumerate(_WORKDAYS) if any(n in low for n in names)}
+
+
+def _dish_count(result):
+    return sum(len(d.get('dishes', [])) for d in (result or {}).get('days', []))
+
+
+def _weakness(result, source_text=None):
+    """Why an answer can't be trusted as-is, or None when it looks complete.
+
+    Groq is not deterministic: the same Il Paladar text came back once as the
+    full week (27 dishes) and once as Thursday and Friday only; Kometa's came
+    back once with Tue-Fri and once with nothing but an empty Mon/Sat/Sun.
+    Both bad answers were valid JSON, so nothing downstream noticed.
+    """
+    if not result or not result.get('days'):
+        return 'no days'
+    if _dish_count(result) == 0:
+        return 'no dishes'
+    if source_text:
+        named = _workdays(source_text)
+        covered = set().union(*(_workdays(d.get('day', '')) for d in result['days']))
+        # A closed holiday may rightly be missing; half the week missing is not.
+        if len(named) >= 3 and len(covered & named) * 2 < len(named):
+            return f'covers {len(covered & named)} of {len(named)} workdays in the text'
+    return None
+
+
+def _better(first, second, source_text=None):
+    """The more complete of two answers: workdays covered, then dishes."""
+    def rank(r):
+        covered = set().union(*(_workdays(d.get('day', '')) for d in (r or {}).get('days', [])))
+        return (len(covered), _dish_count(r))
+    if not second:
+        return first
+    if not first:
+        return second
+    return second if rank(second) > rank(first) else first
+
+
 def analyze_text(text, source_name):
-    """Groq first, Gemini backup."""
+    """Groq first; Gemini when Groq's answer is missing or looks incomplete."""
     result = _groq_text(text, source_name)
-    if result and result.get('days'):
+    weak = _weakness(result, text)
+    if weak is None:
         return result
-    return _gemini_text(text, source_name)
+    if result:
+        log(f"WARNING: Groq answer for {source_name} looks incomplete ({weak}), asking Gemini too.")
+    return _better(result, _gemini_text(text, source_name), text)
 
 
 def analyze_image(image_path):
-    """Groq vision first, Gemini backup."""
+    """Groq vision first; Gemini when its answer is missing or looks incomplete."""
     result = _groq_image(image_path)
-    if result and result.get('days'):
+    if _weakness(result) is None:
         return result
-    return _gemini_image(image_path)
+    return _better(result, _gemini_image(image_path))
 
 
 def analyze_pdf(pdf_path):

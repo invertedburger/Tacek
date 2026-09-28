@@ -424,3 +424,116 @@ def test_redo_does_not_claim_the_content_is_new(tmp_path, monkeypatch):
     path.write_text(json.dumps(data), encoding='utf-8')
     processor.process_all_webpages(url)
     assert log_path.read_text(encoding='utf-8') == first
+
+
+# ── 2026-09-28: Groq's incomplete answers accepted as the week's menu ─────────
+
+PALADAR_TEXT = ('Týdenní menu | 28. 9. - 2.10. 2026 | Pondělí | Státní svátek zavřeno | '
+                'Úterý | 150g Španělský ptáček | Středa | Kuřecí steak | Čtvrtek | Drůbeží vývar | '
+                'Pátek | Steak z vepřové panenky')
+
+
+def _dishes(n):
+    return [{'name': f'Jídlo {i}'} for i in range(n)]
+
+
+def test_null_label_junk_day_is_dropped():
+    """{"day": null, "dishes": []} parsed as undated → counted as today → the
+    broken answer stuck in the cache for the week."""
+    menu = analyzer._parse(json.dumps({'days': [
+        {'day': None, 'dishes': []},
+        {'day': 'Čtvrtek 1.10.2026', 'dishes': _dishes(5)},
+    ]}))
+    assert [d['day'] for d in menu['days']] == ['Čtvrtek 1.10.2026']
+
+
+def test_null_label_with_dishes_becomes_undated_not_none():
+    menu = analyzer._parse(json.dumps({'days': [{'day': None, 'dishes': _dishes(2)}]}))
+    assert menu['days'][0]['day'] == ''
+
+
+def test_missing_half_the_week_is_weak():
+    # The live answer for Il Paladar: Thursday and Friday only.
+    broken = {'days': [{'day': 'Čtvrtek 1.10.2026', 'dishes': _dishes(5)},
+                       {'day': 'Pátek 2.10.2026', 'dishes': _dishes(5)}]}
+    assert analyzer._weakness(broken, PALADAR_TEXT)
+
+
+def test_closed_holiday_missing_is_not_weak():
+    # Monday was a state holiday; Tue-Fri is a complete week.
+    ok = {'days': [{'day': f'{d} 2026', 'dishes': _dishes(5)}
+                   for d in ('Úterý 29.9.', 'Středa 30.9.', 'Čtvrtek 1.10.', 'Pátek 2.10.')]}
+    assert analyzer._weakness(ok, PALADAR_TEXT) is None
+
+
+def test_no_dishes_at_all_is_weak():
+    # The live answer for Kometa: empty Mon/Sat/Sun, Tue-Fri gone.
+    broken = {'days': [{'day': 'PONDĚLÍ 28. 9. 2026', 'dishes': []},
+                       {'day': 'SOBOTA 3. 10. 2026', 'dishes': []}]}
+    assert analyzer._weakness(broken) == 'no dishes'
+
+
+def test_uppercase_weekdays_count_as_coverage():
+    ok = {'days': [{'day': f'{d} 2026', 'dishes': _dishes(3)}
+                   for d in ('ÚTERÝ 29. 9.', 'STŘEDA 30. 9.', 'ČTVRTEK 1. 10.', 'PÁTEK 2. 10.')]}
+    assert analyzer._weakness(ok, 'PONDĚLÍ ÚTERÝ STŘEDA ČTVRTEK PÁTEK') is None
+
+
+def test_daily_menu_is_not_judged_by_weekday_coverage():
+    # A single-day text naming one weekday can't be "half the week missing".
+    one_day = {'days': [{'day': 'Úterý 29.9.2026', 'dishes': _dishes(4)}]}
+    assert analyzer._weakness(one_day, 'Úterý 29.9.2026 polední menu') is None
+
+
+def _groq_returning(payload):
+    mock = MagicMock()
+    mock.chat.completions.create.return_value.choices = [
+        MagicMock(message=MagicMock(content=json.dumps(payload)))]
+    return mock
+
+
+def _gemini_returning(payload):
+    mock = MagicMock()
+    mock.models.generate_content.return_value.text = json.dumps(payload)
+    return mock
+
+
+def test_weak_groq_answer_is_replaced_by_a_fuller_gemini_one():
+    broken = {'days': [{'day': 'Čtvrtek 1.10.2026', 'dishes': _dishes(5)},
+                       {'day': 'Pátek 2.10.2026', 'dishes': _dishes(5)}]}
+    full = {'days': [{'day': f'{d} 2026', 'dishes': _dishes(6)}
+                     for d in ('Úterý 29.9.', 'Středa 30.9.', 'Čtvrtek 1.10.', 'Pátek 2.10.')]}
+    with patch.object(analyzer, '_groq', _groq_returning(broken)), \
+         patch.object(analyzer, '_gemini', _gemini_returning(full)):
+        assert analyzer.analyze_text(PALADAR_TEXT, 'Il Paladar') == full
+
+
+def test_weak_groq_answer_kept_when_gemini_is_worse():
+    broken = {'days': [{'day': 'Čtvrtek 1.10.2026', 'dishes': _dishes(5)}]}
+    with patch.object(analyzer, '_groq', _groq_returning(broken)), \
+         patch.object(analyzer, '_gemini', _gemini_returning({'days': []})):
+        assert analyzer.analyze_text(PALADAR_TEXT, 'Il Paladar') == broken
+
+
+def test_weak_groq_answer_kept_when_gemini_is_down():
+    broken = {'days': [{'day': 'Čtvrtek 1.10.2026', 'dishes': _dishes(5)}]}
+    down = MagicMock()
+    down.models.generate_content.side_effect = Exception('403 PERMISSION_DENIED')
+    with patch.object(analyzer, '_groq', _groq_returning(broken)), \
+         patch.object(analyzer, '_gemini', down):
+        assert analyzer.analyze_text(PALADAR_TEXT, 'Il Paladar') == broken
+
+
+def test_complete_groq_answer_skips_gemini():
+    full = {'days': [{'day': f'{d} 2026', 'dishes': _dishes(6)}
+                     for d in ('Úterý 29.9.', 'Středa 30.9.', 'Čtvrtek 1.10.', 'Pátek 2.10.')]}
+    gemini = _gemini_returning({'days': []})
+    with patch.object(analyzer, '_groq', _groq_returning(full)), \
+         patch.object(analyzer, '_gemini', gemini):
+        assert analyzer.analyze_text(PALADAR_TEXT, 'Il Paladar') == full
+    gemini.models.generate_content.assert_not_called()
+
+
+def test_version_was_bumped_for_the_gate():
+    # The broken Paladar answer is cached; only a new version re-analyses it.
+    assert analyzer.ANALYSIS_VERSION >= 3
