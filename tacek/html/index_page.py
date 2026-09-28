@@ -175,7 +175,14 @@ def generate(sources, timestamp, today=None):
             {'n': s['name'], 'u': s['result_file'], 'lat': s['coords'][0], 'lng': s['coords'][1]}
             for s in with_coords
         ], ensure_ascii=False)
-        leaflet_css = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>'
+        # OSM has no dark style, so dark mode inverts the tiles (only the tile
+        # pane — markers and popups keep their colours). Pure CSS on the .dark
+        # class, so the theme toggle needs no JS here.
+        leaflet_css = """<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    .dark #map.leaflet-container { background: #1f2937; }
+    .dark #map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
+  </style>"""
         map_section = """
   <div class="max-w-2xl mx-auto px-4 pb-6">
     <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">Mapa</h2>
@@ -188,15 +195,14 @@ def generate(sources, timestamp, today=None):
     function htmlEscape(s) {{
       return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }}
-    const lt = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{attribution:'&copy; OSM &copy; CARTO',maxZoom:19}});
-    const dt = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png', {{attribution:'&copy; OSM &copy; CARTO',maxZoom:19}});
+    // CARTO basemaps stopped serving tiles without an API key (Sept 2026: every
+    // tile became an "API KEY REQUIRED" watermark). OSM's standard tiles need
+    // no key; their usage policy asks for the copyright link below.
     const map = L.map('map');
-    let tile = document.documentElement.classList.contains('dark') ? dt : lt;
-    tile.addTo(map);
-    new MutationObserver(() => {{
-      const nd = document.documentElement.classList.contains('dark');
-      map.removeLayer(tile); tile = nd ? dt : lt; tile.addTo(map);
-    }}).observe(document.documentElement, {{attributes:true, attributeFilter:['class']}});
+    L.tileLayer('https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }}).addTo(map);
     const icon = L.divIcon({{
       className: '',
       html: '<div style="background:#22c55e;color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.3)">&#127860;</div>',

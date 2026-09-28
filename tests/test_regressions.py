@@ -594,3 +594,29 @@ def test_guard_names_the_card_even_when_the_first_step_throws(tmp_path, monkeypa
     sources = processor.process_all_webpages(['https://a.example/menu/', 'https://b.example/menu/'])
     assert [s['name'] for s in sources] == ['Alfa', 'Beta']
     assert all(s['no_menu'] for s in sources)
+
+
+# ── 2026-09-28: map tiles turned into "API KEY REQUIRED" watermarks ──────────
+
+def _map_html():
+    card = {'name': 'Eatology', 'url': 'https://www.iqrestaurant.cz/', 'result_file': 'x.html',
+            'last_updated': '2026-09-28 11:37', 'top_dishes': [], 'rec_date': None,
+            'stale_menu': False, 'top_by_day': {}, 'menu_dates': [], 'coords': [49.18, 16.60]}
+    return index_page.generate([card], '2026-09-28 11:37', '2026-09-28')
+
+
+def test_map_does_not_use_carto():
+    """CARTO basemaps now need an API key; keyless requests get a watermark tile."""
+    assert 'cartocdn' not in _map_html()
+
+
+def test_map_uses_keyless_osm_tiles_with_required_attribution():
+    html = _map_html()
+    assert 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' in html
+    assert 'https://www.openstreetmap.org/copyright' in html     # OSM tile policy
+
+
+def test_dark_mode_dims_only_the_tiles():
+    html = _map_html()
+    assert '.dark #map .leaflet-tile-pane { filter: invert(1)' in html
+    assert 'leaflet-marker-pane' not in html                     # markers keep their green
