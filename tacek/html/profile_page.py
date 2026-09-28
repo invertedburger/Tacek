@@ -7,7 +7,7 @@ def generate():
     hdr = header('index.html', i18n.cs('nav.back'), i18n.cs('profile.title'))
     return f"""<!DOCTYPE html>
 <html lang="cs">
-{head("Nastavení &ndash; Tácek", CHIP_CSS)}
+{head("Nastavení – Tácek", CHIP_CSS)}
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen">
 {hdr}
 

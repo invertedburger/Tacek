@@ -1,3 +1,4 @@
+from html import escape
 from tacek.html.assets import DARK_INIT, TAILWIND, CHIP_CSS
 from tacek.html import i18n
 from tacek.ranking import _parse_date
@@ -33,13 +34,15 @@ def parse_date(label):
 
 
 def head(title, extra_css=''):
+    # title is plain text and is escaped here, once: pass "–", not "&ndash;",
+    # or the tab shows the entity literally.
     return f"""<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>{title}</title>
+  <title>{escape(title)}</title>
   {DARK_INIT}
   {TAILWIND}
   {extra_css}

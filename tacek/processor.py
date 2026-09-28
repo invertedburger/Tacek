@@ -126,7 +126,8 @@ def process_all_pdfs(pdf_links):
 
     for url in pdf_links:
         # Resolved up front so the guard below can still name the card if the
-        # very first step throws.
+        # very first step throws — otherwise the except block hits NameError
+        # (first restaurant) or reuses the previous restaurant's name.
         restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(urlparse(url).netloc, urlparse(url).netloc)
         guard_mark = len(sources)
         try:
@@ -217,7 +218,8 @@ def process_all_webpages(webpage_links):
 
     for url in webpage_links:
         # Resolved up front so the guard below can still name the card if the
-        # very first step throws.
+        # very first step throws — otherwise the except block hits NameError
+        # (first restaurant) or reuses the previous restaurant's name.
         restaurant_name = config.RESTAURANT_DISPLAY_NAMES.get(urlparse(url).netloc, urlparse(url).netloc)
         guard_mark = len(sources)
         try:

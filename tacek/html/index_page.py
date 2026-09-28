@@ -185,6 +185,9 @@ def generate(sources, timestamp, today=None):
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
   (function() {{
+    function htmlEscape(s) {{
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }}
     const lt = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png',{{attribution:'&copy; OSM &copy; CARTO',maxZoom:19}});
     const dt = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png', {{attribution:'&copy; OSM &copy; CARTO',maxZoom:19}});
     const map = L.map('map');
@@ -201,7 +204,7 @@ def generate(sources, timestamp, today=None):
     }});
     const rs = {markers_js};
     rs.forEach(r => L.marker([r.lat,r.lng],{{icon}}).addTo(map)
-      .bindPopup('<b style="font-size:13px">'+r.n+'</b><br><a href="'+r.u+'" style="color:#22c55e;font-size:12px">Zobrazit menu &rarr;</a>'));
+      .bindPopup('<b style="font-size:13px">'+htmlEscape(r.n)+'</b><br><a href="'+htmlEscape(r.u)+'" style="color:#22c55e;font-size:12px">Zobrazit menu &rarr;</a>'));
     if (rs.length) map.fitBounds(rs.map(r=>[r.lat,r.lng]),{{padding:[50,50]}});
   }})();
   </script>"""
@@ -212,7 +215,7 @@ def generate(sources, timestamp, today=None):
 
     return f"""<!DOCTYPE html>
 <html lang="cs">
-{head("Tácek &ndash; Restaurace", leaflet_css + CHIP_CSS + EASTER_CSS)}
+{head("Tácek – Restaurace", leaflet_css + CHIP_CSS + EASTER_CSS)}
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen">
 
   <header class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">

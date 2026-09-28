@@ -101,7 +101,88 @@ def _parse(text):
     # Models occasionally tack stray closing brackets onto otherwise valid JSON,
     # so decode the first complete value instead of failing on the leftovers.
     obj, _ = json.JSONDecoder().raw_decode(text.strip())
-    return _as_menu(obj)
+    data = _as_menu(obj)
+    # Normalize level names and validate macro fields
+    data = _normalize_levels(data)
+    data = _validate_macros(data)
+    return data
+
+
+def _normalize_levels(data):
+    """Normalize fodmap_level and fitness_level to expected case.
+
+    Models sometimes return lowercase or mixed case: "low" instead of "Low",
+    "medium" instead of "Medium", etc. Normalize to match ranking.py expectations.
+    Also ensure every day has a dishes list (even if empty).
+    """
+    if not isinstance(data, dict) or 'days' not in data:
+        return data
+
+    _FODMAP_NORMS = {'low': 'Low', 'moderate': 'Moderate', 'high': 'High'}
+    _FITNESS_NORMS = {'low': 'Low', 'medium': 'Medium', 'high': 'High'}
+
+    for day in data.get('days', []):
+        if not isinstance(day, dict):
+            continue
+        # Ensure dishes key exists and is a list
+        if 'dishes' not in day or not isinstance(day['dishes'], list):
+            day['dishes'] = []
+            continue
+        dishes = day['dishes']
+        for dish in dishes:
+            if not isinstance(dish, dict):
+                continue
+            # Normalize fodmap_level
+            fodmap = dish.get('fodmap_level', '')
+            if isinstance(fodmap, str):
+                normalized = _FODMAP_NORMS.get(fodmap.lower())
+                if normalized:
+                    dish['fodmap_level'] = normalized
+            # Normalize fitness_level
+            fitness = dish.get('fitness_level', '')
+            if isinstance(fitness, str):
+                normalized = _FITNESS_NORMS.get(fitness.lower())
+                if normalized:
+                    dish['fitness_level'] = normalized
+    return data
+
+
+def _validate_macros(data):
+    """Validate and convert numeric macro fields (protein_g, carbs_g, fat_g, calories_kcal).
+
+    Models may return these as strings ("35") or None. Convert strings to numbers,
+    skip fields that can't convert. This ensures ranking.py's isinstance checks work.
+    """
+    if not isinstance(data, dict) or 'days' not in data:
+        return data
+
+    macro_fields = ('protein_g', 'carbs_g', 'fiber_g', 'fat_g', 'calories_kcal')
+
+    for day in data.get('days', []):
+        if not isinstance(day, dict):
+            continue
+        dishes = day.get('dishes', [])
+        if not isinstance(dishes, list):
+            continue
+        for dish in dishes:
+            if not isinstance(dish, dict):
+                continue
+            for field in macro_fields:
+                value = dish.get(field)
+                if value is None or isinstance(value, (int, float)):
+                    continue
+                # Try to convert string to number
+                if isinstance(value, str):
+                    try:
+                        # Try int first, then float
+                        if '.' in value:
+                            dish[field] = float(value)
+                        else:
+                            dish[field] = int(value)
+                    except (ValueError, TypeError):
+                        # If conversion fails, remove the field so ranking.py skips it
+                        del dish[field]
+    return data
 
 
 def _as_menu(obj):

@@ -39,6 +39,7 @@ _EXCLUDE = (
     'dezert', 'dessert',
     'vývar', 'vyvar',
     'pomazánka', 'pomazanka',
+    'nátěr', 'nater',  # spread/paste for bread, not a main
     'krém', 'krem',
 )
 
@@ -49,7 +50,13 @@ def _is_main_dish(name):
 
 
 def _clean_name(name):
-    return re.sub(r'^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]+\s*:\s*', '', name).strip()
+    # Remove prefix label (e.g., "PÁTEK: Svíčková" → "Svíčková")
+    cleaned = re.sub(r'^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]+\s*:\s*', '', name)
+    # Normalize internal whitespace (collapse multiple spaces to single)
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    # Strip leading/trailing whitespace
+    cleaned = cleaned.strip()
+    return cleaned if cleaned else ''
 
 
 _DATE_RE = re.compile(r'(\d{1,2})[.\s]+(\d{1,2})(?:[.\s]+(\d{4}))?')
@@ -156,7 +163,7 @@ def _score_dish(dish, strict=True):
     are all a restaurant cooks (see get_top_dishes_by_day's fallback).
     """
     name = _clean_name(dish.get('name', ''))
-    if not _is_main_dish(name):
+    if not name or not _is_main_dish(name):
         return None
     fodmap  = dish.get('fodmap_level', 'Moderate')
     fitness = dish.get('fitness_level') or _stars_to_level(dish.get('fitness_stars', 0))

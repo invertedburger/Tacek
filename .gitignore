@@ -4,3 +4,11 @@ results/
 __pycache__/
 *.pyc
 .env
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/

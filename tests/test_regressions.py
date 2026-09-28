@@ -537,3 +537,60 @@ def test_complete_groq_answer_skips_gemini():
 def test_version_was_bumped_for_the_gate():
     # The broken Paladar answer is cached; only a new version re-analyses it.
     assert analyzer.ANALYSIS_VERSION >= 3
+
+
+# ── 2026-09-28 review of the 26. 9. hardening ────────────────────────────────
+
+@pytest.mark.parametrize('page, kwargs', [
+    ('index_page', None),
+    ('menu_page', None),
+    ('profile_page', None),
+])
+def test_page_titles_are_not_double_escaped(page, kwargs):
+    """head() began escaping its title while callers still passed "&ndash;",
+    so the tab read "Tácek &ndash; Restaurace" literally."""
+    import re
+    from tacek.html import index_page as ip, menu_page as mp, profile_page as pp
+    html = {
+        'index_page':   lambda: ip.generate([], '2026-09-28 11:37', '2026-09-28'),
+        'menu_page':    lambda: mp.generate({'days': []}, 'Eatology', 'https://x.example', '2026-09-28 11:37'),
+        'profile_page': lambda: pp.generate(),
+    }[page]()
+    title = re.search(r'<title>(.*?)</title>', html).group(1)
+    assert '&amp;' not in title, title
+    assert '&ndash;' not in title, title
+
+
+def test_head_escapes_a_restaurant_name_once():
+    import re
+    from tacek.html.components import head
+    title = re.search(r'<title>(.*?)</title>', head('U Tesaře & spol. – Tácek')).group(1)
+    assert title == 'U Tesaře &amp; spol. – Tácek'
+
+
+class _NamesThatFailInsideTheLoop(dict):
+    """Display-name lookup that works once per restaurant, then throws —
+    i.e. a failure on the very first step inside the guard."""
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.calls = 0
+
+    def get(self, *a, **k):
+        self.calls += 1
+        if self.calls % 2 == 0:
+            raise RuntimeError('boom on the first step')
+        return super().get(*a, **k)
+
+
+def test_guard_names_the_card_even_when_the_first_step_throws(tmp_path, monkeypatch):
+    """The 26. 9. hardening dropped the name lookup before the try; a throw on
+    the first step then hit NameError (first card) or borrowed the previous
+    card's name."""
+    monkeypatch.setattr(processor.config, 'RESULTS_DIR', str(tmp_path))
+    monkeypatch.setattr(processor.config, 'RESTAURANT_DISPLAY_NAMES',
+                        _NamesThatFailInsideTheLoop({'a.example': 'Alfa', 'b.example': 'Beta'}))
+    monkeypatch.setattr(processor.config, 'WEBPAGE_PARSERS', {})
+    monkeypatch.setattr(processor, 'download_webpage', lambda url: None)   # never touch the network
+    sources = processor.process_all_webpages(['https://a.example/menu/', 'https://b.example/menu/'])
+    assert [s['name'] for s in sources] == ['Alfa', 'Beta']
+    assert all(s['no_menu'] for s in sources)

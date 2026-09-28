@@ -58,7 +58,7 @@ def generate(data, restaurant_name, source_url, last_updated):
 
     return f"""<!DOCTYPE html>
 <html lang="cs">
-{head(f"{restaurant_name} &ndash; Tácek", CHIP_CSS)}
+{head(f"{restaurant_name} – Tácek", CHIP_CSS)}
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen">
 {hdr}
 

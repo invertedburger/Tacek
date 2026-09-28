@@ -1,4 +1,5 @@
 from datetime import datetime
+from html import escape
 from tacek.html.assets import CHIP_CSS, THEME_JS, LANG_JS
 from tacek.html.components import head, lang_button
 from tacek.html import i18n
@@ -74,7 +75,7 @@ def generate(log_data):
         logs_html += f"""
     <div class="py-2 border-b border-gray-200 dark:border-gray-700 last:border-0">
       <span class="text-xs text-gray-400 dark:text-gray-500">[{entry_time}]</span>
-      <span class="{color_class} text-sm font-mono">{msg}</span>
+      <span class="{color_class} text-sm font-mono">{escape(msg)}</span>
     </div>"""
 
     return f"""<!DOCTYPE html>

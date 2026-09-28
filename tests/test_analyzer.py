@@ -33,6 +33,103 @@ def test_parse_tolerates_trailing_junk():
     assert analyzer._parse(json.dumps(data) + ']}]}') == data
 
 
+def test_parse_normalizes_fodmap_level_case():
+    """Model may return lowercase; normalize to match ranking.py expectations."""
+    data = {
+        'days': [{
+            'day': 'Pondělí 21.9.2026',
+            'dishes': [
+                {'name': 'Dish1', 'fodmap_level': 'low'},
+                {'name': 'Dish2', 'fodmap_level': 'Moderate'},
+                {'name': 'Dish3', 'fodmap_level': 'HIGH'},
+            ]
+        }]
+    }
+    result = analyzer._parse(json.dumps(data))
+    assert result['days'][0]['dishes'][0]['fodmap_level'] == 'Low'
+    assert result['days'][0]['dishes'][1]['fodmap_level'] == 'Moderate'
+    assert result['days'][0]['dishes'][2]['fodmap_level'] == 'High'
+
+
+def test_parse_normalizes_fitness_level_case():
+    """Model may return lowercase; normalize to match ranking.py expectations."""
+    data = {
+        'days': [{
+            'day': 'Pondělí 21.9.2026',
+            'dishes': [
+                {'name': 'Dish1', 'fitness_level': 'low'},
+                {'name': 'Dish2', 'fitness_level': 'Medium'},
+                {'name': 'Dish3', 'fitness_level': 'HIGH'},
+            ]
+        }]
+    }
+    result = analyzer._parse(json.dumps(data))
+    assert result['days'][0]['dishes'][0]['fitness_level'] == 'Low'
+    assert result['days'][0]['dishes'][1]['fitness_level'] == 'Medium'
+    assert result['days'][0]['dishes'][2]['fitness_level'] == 'High'
+
+
+def test_parse_converts_string_macros_to_numbers():
+    """Model may return numeric fields as strings; convert to numbers."""
+    data = {
+        'days': [{
+            'day': 'Pondělí 21.9.2026',
+            'dishes': [
+                {
+                    'name': 'Dish1',
+                    'protein_g': '35',
+                    'carbs_g': '45.5',
+                    'fat_g': '15',
+                    'fiber_g': '5',
+                    'calories_kcal': '450',
+                }
+            ]
+        }]
+    }
+    result = analyzer._parse(json.dumps(data))
+    dish = result['days'][0]['dishes'][0]
+    assert dish['protein_g'] == 35
+    assert isinstance(dish['protein_g'], int)
+    assert dish['carbs_g'] == 45.5
+    assert isinstance(dish['carbs_g'], float)
+    assert dish['fat_g'] == 15
+    assert isinstance(dish['fat_g'], int)
+    assert dish['fiber_g'] == 5
+    assert dish['calories_kcal'] == 450
+
+
+def test_parse_skips_non_numeric_macro_strings():
+    """Model returns malformed numeric field; skip it instead of crashing."""
+    data = {
+        'days': [{
+            'day': 'Pondělí 21.9.2026',
+            'dishes': [
+                {
+                    'name': 'Dish1',
+                    'protein_g': 'not_a_number',
+                    'carbs_g': '45',
+                }
+            ]
+        }]
+    }
+    result = analyzer._parse(json.dumps(data))
+    dish = result['days'][0]['dishes'][0]
+    assert 'protein_g' not in dish  # Removed because conversion failed
+    assert dish['carbs_g'] == 45  # This one succeeded
+
+
+def test_parse_handles_missing_dishes_gracefully():
+    """If dishes key is missing or not a list, normalize to empty list."""
+    data = {'days': [{'day': 'Pondělí 21.9.2026'}]}
+    result = analyzer._parse(json.dumps(data))
+    assert result['days'][0]['dishes'] == []
+
+    # Dishes as non-list value
+    data = {'days': [{'day': 'Pondělí 21.9.2026', 'dishes': 'not_a_list'}]}
+    result = analyzer._parse(json.dumps(data))
+    assert result['days'][0]['dishes'] == []
+
+
 def test_short_trims_long_provider_errors():
     assert len(analyzer._short(Exception('x' * 5000))) <= 201
 

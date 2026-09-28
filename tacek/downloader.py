@@ -94,7 +94,8 @@ def download_webpage(url):
     if r.status_code != 200:
         log(f"WARNING: Web page download failed with status {r.status_code} for {url}")
         return None
-    r.encoding = r.apparent_encoding
+    # Set detected encoding with fallback to UTF-8 if detection fails
+    r.encoding = r.apparent_encoding or 'utf-8'
     log(f"Downloaded {len(r.text)} chars from {url}")
     return r.text
 
